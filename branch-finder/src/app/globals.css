@@ -1,0 +1,130 @@
+@import "tailwindcss";
+
+/* Brightstream Design System */
+:root {
+  /* Primary Colors */
+  --midnight: #0a1628;
+  --navy: #1a2942;
+  --sage: #8b9d83;
+  --cream: #f8f6f1;
+  --gold: #d4af37;
+  --warm-white: #fefdfb;
+  --slate: #64748b;
+  --deep-teal: #0d4d56;
+
+  /* Semantic Colors */
+  --background: var(--warm-white);
+  --foreground: var(--midnight);
+}
+
+@theme inline {
+  /* Colors */
+  --color-midnight: var(--midnight);
+  --color-navy: var(--navy);
+  --color-sage: var(--sage);
+  --color-cream: var(--cream);
+  --color-gold: var(--gold);
+  --color-warm-white: var(--warm-white);
+  --color-slate: var(--slate);
+  --color-deep-teal: var(--deep-teal);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  /* Fonts */
+  --font-display: var(--font-playfair);
+  --font-body: var(--font-jost);
+}
+
+/* Base Styles */
+body {
+  background: var(--warm-white);
+  color: var(--midnight);
+  font-family: var(--font-jost), 'Jost', sans-serif;
+  line-height: 1.6;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-playfair), 'Playfair Display', serif;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+/* Mapbox overrides */
+.mapboxgl-popup-content {
+  padding: 0;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(10, 22, 40, 0.15);
+}
+
+.mapboxgl-popup-close-button {
+  font-size: 20px;
+  padding: 8px 12px;
+  color: var(--slate);
+}
+
+.mapboxgl-popup-close-button:hover {
+  color: var(--midnight);
+  background: transparent;
+}
+
+.mapboxgl-ctrl-group {
+  border-radius: 12px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(10, 22, 40, 0.1) !important;
+}
+
+.mapboxgl-ctrl-group button {
+  width: 36px !important;
+  height: 36px !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--cream);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--slate);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--midnight);
+}
+
+/* Loading animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Focus styles for accessibility */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}

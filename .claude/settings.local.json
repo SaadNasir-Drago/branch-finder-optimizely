@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.developers.optimizely.com)",
+      "Bash(curl:*)",
+      "WebFetch(domain:cg.optimizely.com)",
+      "Bash(npx create-next-app@latest branch-finder --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --yes)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)"
+    ]
+  }
+}
