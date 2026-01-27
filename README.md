@@ -13,7 +13,7 @@ npm install
 
 # Create .env.local:
 NEXT_PUBLIC_MAPBOX_TOKEN=your_mapbox_token
-NEXT_PUBLIC_GRAPHQL_ENDPOINT=https://cg.optimizely.com/content/v2?auth=iQEyR1jR1cBG5mnLQoRotCyNmKUgaO0DT5cRbJPKA3oZGGQo
+NEXT_PUBLIC_GRAPHQL_ENDPOINT=optimizely_graphql_endpoint
 
 npm run dev
 ```
