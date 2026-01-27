@@ -1,138 +1,91 @@
-# Brightstream Bank Branch Finder
+# Brightstream Bank - Branch Finder
 
-A responsive web application for locating Brightstream Bank branches worldwide with interactive mapping and real-time directions.
+Branch finder application for Brightstream Bank's 1,000+ worldwide locations. Integrates with Optimizely Graph (GraphQL) for branch data and Mapbox GL JS for interactive mapping.
 
 ## Live Demo
 
-[Add deployment URL here]
+[branch-finder-optimizely.vercel.app](https://branch-finder-optimizely.vercel.app/)
 
 ## Setup
 
 ```bash
-# Install dependencies
 npm install
 
-# Configure environment
-# Create .env.local with:
+# Create .env.local:
 NEXT_PUBLIC_MAPBOX_TOKEN=your_mapbox_token
+NEXT_PUBLIC_GRAPHQL_ENDPOINT=https://cg.optimizely.com/content/v2?auth=iQEyR1jR1cBG5mnLQoRotCyNmKUgaO0DT5cRbJPKA3oZGGQo
 
-# Run development server
 npm run dev
-
-# Build for production
-npm run build
 ```
 
-## Tech Stack
+Mapbox tokens available at [mapbox.com](https://mapbox.com) (free tier).
 
-- Next.js 16 (App Router) + React 19 + TypeScript
-- Tailwind CSS v4
-- Mapbox GL JS + Directions API
-- Optimizely Graph (GraphQL)
+## Technologies
 
-## What Was Built
+- **Framework:** Next.js 16 (App Router), React 19, TypeScript
+- **Styling:** Tailwind CSS v4 with custom design tokens
+- **Data:** Optimizely Graph GraphQL API (direct fetch, no Apollo)
+- **Maps:** Mapbox GL JS v3, Mapbox Directions API
+- **Geolocation:** Browser Geolocation API + Haversine distance calculation
 
-### Core Features
-- Fetches 1,000+ branches from Optimizely Graph API
-- Real-time search by name, city, address
-- Filter by country and city
-- Sort by name, city, country, distance
-- Fully responsive design (mobile, desktop)
-- Brightstream brand design system
+## Approach
 
-### Premium Features
-- Interactive Mapbox map with custom markers
-- Geolocation for finding nearest branches
-- Distance calculation (Haversine formula)
-- Turn-by-turn directions via Mapbox Directions API
-- Branch detail panel with share functionality
-- URL state management for shareable links
+### Research
+- Explored the Optimizely Graph API via GraphQL Playground to understand the Branch schema, pagination model, and available fields
+- Identified that coordinates are stored as comma-separated strings, requiring client-side parsing
+- Studied Brightstream's HTML mockups (`home.html`, `articles.html`) to extract the design system
 
-## Implementation Approach
+### Design System Extraction
+HTML Pulled directly from the Brightstream mockups:
+- **Colors:** Midnight `#0a1628`, Navy `#1a2942`, Deep Teal `#0d4d56`, Sage `#8b9d83`, Cream `#f8f6f1`, Gold `#d4af37`
+- **Typography:** Playfair Display (headings), Jost (body)
+- **Patterns:** Rounded corners, gradient backgrounds, hover lift effects, gold accent CTAs
 
-### 1. Research Phase
-- Explored Optimizely Graph API via GraphQL Playground
-- Analyzed 1,000 branch records, identified coordinate format (strings)
-- Extracted design system from Brightstream HTML mockups (colors, typography, spacing)
-- Researched map libraries (chose Mapbox for performance + customization)
+These were codified as Tailwind design tokens in `globals.css` so every component uses the same system.
 
-### 2. Architecture Decisions
+### Key Decisions
 
-**Client-side data fetching**
-Why: Instant search without API round-trips, no server-side search capability
-How: Parallel batch requests (3 concurrent), load all branches once
+**Client-side data fetching** — All 1,000 branches load on mount via parallel batch requests. The Optimizely Graph API has no search capability, so client-side filtering provides instant results without round-trips. The dataset is small enough (~100KB) to hold in memory.
 
-**Mapbox over alternatives**
-Why: Better performance with 1,000+ markers, free tier, native TypeScript support
-vs Google Maps: Better pricing, more customization
-vs Leaflet: Better WebGL rendering, built-in Directions API
+**Mapbox over Google Maps/Leaflet** — Better WebGL performance with 1,000+ markers, more styling control to match the brand, built-in Directions API, and a generous free tier.
 
-**Map-based marker storage**
-Why: Stable references by branch ID prevent filtering bugs
-Original: Array indices misaligned after filtering
-Fixed: Map<branchId, Marker> provides O(1) lookups
+**Map-based marker management** — Markers stored in a `Map<branchId, Marker>` rather than an array, giving stable references that survive filtering and enabling selective updates (only re-render markers whose selection state changed).
 
-**Mobile-first responsive design**
-Why: Mobile users need focused single-task UI
-How: Toggle between list/map on mobile, split view on desktop
+**Mobile: list/map toggle** — On mobile, users toggle between list and map views. On desktop, a 40/60 split view shows both simultaneously.
 
-### 3. Key Technical Challenges
+## Features
 
-**Challenge: Markers disappearing on filter**
-Root cause: Array indices broke when branches array changed
-Solution: Refactored from Array to Map data structure using stable branch IDs
-Result: 99.8% reduction in DOM operations
+**Core:** Search by name/city/address, filter by country and city, sort by name/city/country/distance, responsive design, Brightstream brand styling
 
-**Challenge: Z-index conflicts**
-Issue: Selected markers (z-1000) appeared above navigation (z-50)
-Solution: Established clear hierarchy (nav: z-50, markers: z-10/40, panel: z-9999/10000)
-
-**Challenge: Hydration errors from browser extensions**
-Issue: Extensions inject attributes before React hydrates
-Solution: Added suppressHydrationWarning to affected form elements
-
-### 4. Performance Optimizations
-
-- Selective marker updates (only update changed selection states)
-- Debounced search (300ms) and animations (100ms)
-- Deferred heavy operations (requestAnimationFrame for bounds calculation)
-- Map settings: disabled antialiasing, reduced fade duration
-- Dynamic import for map component (avoid SSR)
+**Nice to have (all implemented):** Interactive Mapbox map with custom markers, geolocation (nearest branch), distance badges, turn-by-turn directions, branch detail panel with share, URL state for shareable filtered views
 
 ## Project Structure
 
 ```
 src/
 ├── app/
-│   ├── layout.tsx              # Root layout, fonts
-│   ├── page.tsx                # Main page, state management
-│   └── globals.css             # Tailwind + design tokens
+│   ├── layout.tsx            # Root layout, font loading
+│   ├── page.tsx              # Main page, state coordination
+│   └── globals.css           # Tailwind config + design tokens
 ├── components/
-│   ├── Header.tsx              # Navigation
-│   ├── SearchBar.tsx           # Search + filters
-│   ├── BranchCard.tsx          # Individual branch display
-│   ├── BranchList.tsx          # Scrollable list container
-│   ├── MapView.tsx             # Mapbox integration
-│   └── BranchDetailPanel.tsx   # Slide-out details
+│   ├── Header.tsx            # Navigation bar
+│   ├── SearchBar.tsx         # Search, filters, sort controls
+│   ├── BranchCard.tsx        # Branch card with actions
+│   ├── BranchList.tsx        # Scrollable list container
+│   ├── MapView.tsx           # Mapbox map + markers + directions
+│   ├── BranchDetailPanel.tsx # Slide-out detail view
+│   └── useBranches.ts        # Data fetching hook
 ├── hooks/
-│   └── useGeolocation.ts       # Location management
+│   └── useGeolocation.ts     # Browser geolocation wrapper
 ├── lib/
-│   └── utils.ts                # Utilities (distance calc, filters, sort)
+│   └── utils.ts              # Filtering, sorting, distance calc
 └── types/
-    ├── branch.ts               # TypeScript interfaces
-    └── mapbox-directions.d.ts  # Custom type definitions
+    ├── branch.ts             # Branch interfaces
+    └── mapbox-directions.d.ts
 ```
 
 ## Known Limitations
 
-- Initial load: 2-4 seconds for 1,000 branches (acceptable trade-off for instant search)
-- No operating hours or branch services (not in API schema)
-- Coordinates come as strings (parsed client-side)
-
-## Browser Support
-
-Tested on Chrome 120+, Firefox 121+, Safari 17+, Edge 120+
-
----
-
-Built with Next.js, TypeScript, Tailwind CSS, and Mapbox GL JS
+- Initial load takes 2-4 seconds (fetching all branches); trade-off for instant client-side search
+- No branch operating hours or services data (not available in the API schema)
+- Coordinates stored as strings in the API; parsed client-side on fetch
