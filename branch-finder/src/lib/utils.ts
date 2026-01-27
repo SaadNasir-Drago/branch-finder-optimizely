@@ -1,8 +1,5 @@
 import { Branch, BranchRaw, CountryOption, UserLocation } from "@/types/branch";
 
-/**
- * Parse coordinates string "lat, lng" into separate lat/lng numbers
- */
 export function parseCoordinates(coordString: string): { lat: number; lng: number } | null {
   if (!coordString) return null;
 
@@ -14,9 +11,6 @@ export function parseCoordinates(coordString: string): { lat: number; lng: numbe
   return { lat: parts[0], lng: parts[1] };
 }
 
-/**
- * Transform raw branch data to include parsed coordinates
- */
 export function transformBranch(raw: BranchRaw): Branch | null {
   const coords = parseCoordinates(raw.Coordinates);
   if (!coords) return null;
@@ -28,18 +22,12 @@ export function transformBranch(raw: BranchRaw): Branch | null {
   };
 }
 
-/**
- * Transform array of raw branches, filtering out invalid ones
- */
 export function transformBranches(rawBranches: BranchRaw[]): Branch[] {
   return rawBranches
     .map(transformBranch)
     .filter((b): b is Branch => b !== null);
 }
 
-/**
- * Get unique countries from branches with counts
- */
 export function getCountryOptions(branches: Branch[]): CountryOption[] {
   const countryMap = new Map<string, { name: string; count: number }>();
 
@@ -64,9 +52,6 @@ export function getCountryOptions(branches: Branch[]): CountryOption[] {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/**
- * Get unique cities from branches with counts
- */
 export function getCityOptions(branches: Branch[]): Array<{ city: string; count: number }> {
   const cityMap = new Map<string, number>();
 
@@ -84,9 +69,6 @@ export function getCityOptions(branches: Branch[]): Array<{ city: string; count:
     .sort((a, b) => a.city.localeCompare(b.city));
 }
 
-/**
- * Filter branches by search query, country, and city
- */
 export function filterBranches(
   branches: Branch[],
   searchQuery: string,
@@ -118,9 +100,6 @@ export function filterBranches(
   return filtered;
 }
 
-/**
- * Sort branches by different criteria
- */
 export function sortBranches(
   branches: Branch[],
   sortBy: "name" | "city" | "country" | "distance"
@@ -141,9 +120,6 @@ export function sortBranches(
   }
 }
 
-/**
- * Add distance to branches from user location
- */
 export function addDistanceToBranches(
   branches: Branch[],
   userLocation: UserLocation
@@ -159,10 +135,7 @@ export function addDistanceToBranches(
   }));
 }
 
-/**
- * Calculate distance between two points using Haversine formula
- * Returns distance in kilometers
- */
+// Haversine formula - returns distance in kilometers
 export function calculateDistance(
   lat1: number,
   lng1: number,
@@ -186,9 +159,6 @@ function toRad(deg: number): number {
   return deg * (Math.PI / 180);
 }
 
-/**
- * Format distance for display
- */
 export function formatDistance(km: number): string {
   if (km < 1) {
     return `${Math.round(km * 1000)} m`;
@@ -196,9 +166,6 @@ export function formatDistance(km: number): string {
   return `${km.toFixed(1)} km`;
 }
 
-/**
- * Debounce function for search input
- */
 export function debounce<T extends (...args: Parameters<T>) => void>(
   func: T,
   wait: number

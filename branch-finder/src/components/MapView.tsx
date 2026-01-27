@@ -26,7 +26,7 @@ export default function MapView({
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
-  const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
   const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const popupRef = useRef<mapboxgl.Popup | null>(null);
   const directionsRef = useRef<MapboxDirections | null>(null);
@@ -191,7 +191,7 @@ export default function MapView({
       justify-content: center;
       box-shadow: 0 4px 12px rgba(10, 22, 40, ${isSelected ? "0.4" : "0.3"});
       transition: all 0.2s ease;
-      z-index: ${isSelected ? "1000" : "1"};
+      z-index: ${isSelected ? "40" : "10"};
     `;
 
     const inner = document.createElement("div");
@@ -210,22 +210,21 @@ export default function MapView({
   useEffect(() => {
     if (!map.current) return;
 
-    // Create a map of current markers by branch ID for quick lookup
-    const currentMarkerMap = new Map<string, mapboxgl.Marker>();
-    markersRef.current.forEach((marker, index) => {
-      const branchId = branches[index]?._id;
-      if (branchId) {
-        currentMarkerMap.set(branchId, marker);
+    // Get current branch IDs for quick lookup
+    const currentBranchIds = new Set(branches.map(b => b._id));
+
+    // Remove markers for branches that are no longer in the filtered list
+    markersRef.current.forEach((marker, branchId) => {
+      if (!currentBranchIds.has(branchId)) {
+        marker.remove();
+        markersRef.current.delete(branchId);
       }
     });
 
-    // Track which markers to keep
-    const markersToKeep = new Set<mapboxgl.Marker>();
-
-    // Add or update markers
+    // Add or update markers for current branches
     branches.forEach((branch) => {
       const isSelected = selectedBranch?._id === branch._id;
-      const existingMarker = currentMarkerMap.get(branch._id);
+      const existingMarker = markersRef.current.get(branch._id);
 
       if (existingMarker) {
         // Update existing marker if selection state changed
@@ -276,9 +275,7 @@ export default function MapView({
             .setLngLat([branch.lng, branch.lat])
             .addTo(map.current!);
 
-          markersToKeep.add(newMarker);
-        } else {
-          markersToKeep.add(existingMarker);
+          markersRef.current.set(branch._id, newMarker);
         }
       } else {
         // Create new marker
@@ -322,22 +319,12 @@ export default function MapView({
           .setLngLat([branch.lng, branch.lat])
           .addTo(map.current!);
 
-        markersToKeep.add(marker);
+        markersRef.current.set(branch._id, marker);
       }
     });
-
-    // Remove markers that are no longer needed
-    markersRef.current.forEach((marker) => {
-      if (!markersToKeep.has(marker)) {
-        marker.remove();
-      }
-    });
-
-    // Update markers ref
-    markersRef.current = Array.from(markersToKeep);
 
     // Fit bounds only when branches list changes (not on selection)
-    if (branches.length > 0 && markersRef.current.length === branches.length) {
+    if (branches.length > 0 && markersRef.current.size === branches.length) {
       const bounds = new mapboxgl.LngLatBounds();
       branches.forEach((branch) => {
         bounds.extend([branch.lng, branch.lat]);

@@ -35,7 +35,6 @@ export default function BranchDetailPanel({
           url: shareUrl,
         });
       } catch {
-        // User cancelled or error - fallback to clipboard
         copyToClipboard(shareUrl);
       }
     } else {
@@ -45,7 +44,6 @@ export default function BranchDetailPanel({
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    // Could add toast notification here
   };
 
   return (

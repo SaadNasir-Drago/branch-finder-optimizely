@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import Header from "@/components/Header";
 import SearchBar from "@/components/SearchBar";
 import BranchList from "@/components/BranchList";
@@ -527,8 +528,15 @@ function BranchFinderContent() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 sm:gap-10 lg:gap-12">
             {/* Article 1 */}
             <article className="bg-cream rounded-[25px] overflow-hidden transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] hover:-translate-y-[10px] hover:shadow-[0_30px_60px_rgba(10,22,40,0.15)]">
-              <div className="h-[250px] bg-gradient-to-br from-midnight to-deep-teal relative">
-                <span className="absolute top-6 left-6 bg-gold text-midnight px-5 py-2 rounded-[20px] text-[0.85rem] font-semibold uppercase tracking-[0.5px]">
+              <div className="h-[250px] relative">
+                <Image
+                  src="/photo-1486406146926-c627a92ad1ab.jpeg"
+                  alt="Personal Finance"
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                />
+                <span className="absolute top-6 left-6 bg-gold text-midnight px-5 py-2 rounded-[20px] text-[0.85rem] font-semibold uppercase tracking-[0.5px] z-10">
                   Personal Finance
                 </span>
               </div>
@@ -551,8 +559,15 @@ function BranchFinderContent() {
 
             {/* Article 2 */}
             <article className="bg-cream rounded-[25px] overflow-hidden transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] hover:-translate-y-[10px] hover:shadow-[0_30px_60px_rgba(10,22,40,0.15)]">
-              <div className="h-[250px] bg-gradient-to-br from-deep-teal to-sage relative">
-                <span className="absolute top-6 left-6 bg-gold text-midnight px-5 py-2 rounded-[20px] text-[0.85rem] font-semibold uppercase tracking-[0.5px]">
+              <div className="h-[250px] relative">
+                <Image
+                  src="/photo-1551135049-8a33b5883817.jpeg"
+                  alt="Investing"
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                />
+                <span className="absolute top-6 left-6 bg-gold text-midnight px-5 py-2 rounded-[20px] text-[0.85rem] font-semibold uppercase tracking-[0.5px] z-10">
                   Investing
                 </span>
               </div>
@@ -575,8 +590,15 @@ function BranchFinderContent() {
 
             {/* Article 3 */}
             <article className="bg-cream rounded-[25px] overflow-hidden transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] hover:-translate-y-[10px] hover:shadow-[0_30px_60px_rgba(10,22,40,0.15)]">
-              <div className="h-[250px] bg-gradient-to-br from-navy to-midnight relative">
-                <span className="absolute top-6 left-6 bg-gold text-midnight px-5 py-2 rounded-[20px] text-[0.85rem] font-semibold uppercase tracking-[0.5px]">
+              <div className="h-[250px] relative">
+                <Image
+                  src="/photo-1559526324-4b87b5e36e44.jpeg"
+                  alt="Business"
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                />
+                <span className="absolute top-6 left-6 bg-gold text-midnight px-5 py-2 rounded-[20px] text-[0.85rem] font-semibold uppercase tracking-[0.5px] z-10">
                   Business
                 </span>
               </div>
