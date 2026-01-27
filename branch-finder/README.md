@@ -34,6 +34,7 @@ Mapbox tokens available at [mapbox.com](https://mapbox.com) (free tier).
 - Explored the Optimizely Graph API via GraphQL Playground to understand the Branch schema, pagination model, and available fields
 - Identified that coordinates are stored as comma-separated strings, requiring client-side parsing
 - Studied Brightstream's HTML mockups (`home.html`, `articles.html`) to extract the design system
+- Initial API exploration data saved in `branch_data_all.json` in the root directory
 
 ### Design System Extraction
 HTML Pulled directly from the Brightstream mockups:
@@ -45,7 +46,7 @@ These were codified as Tailwind design tokens in `globals.css` so every componen
 
 ### Key Decisions
 
-**Client-side data fetching** — All 1,000 branches load on mount via parallel batch requests. The Optimizely Graph API has no search capability, so client-side filtering provides instant results without round-trips. The dataset is small enough (~100KB) to hold in memory.
+**Client-side data fetching** — All 1,000 branches load on mount via parallel batch requests (3 concurrent, 100 per batch). The Optimizely Graph API has no search capability, so client-side filtering provides instant results without round-trips. Data is stored in React state (`useBranches` hook) for the session — no persistent cache or database. Page refresh triggers re-fetch.
 
 **Mapbox over Google Maps/Leaflet** — Better WebGL performance with 1,000+ markers, more styling control to match the brand, built-in Directions API, and a generous free tier.
 
