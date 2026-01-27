@@ -7,6 +7,8 @@ interface BranchListProps {
   branches: Branch[];
   selectedBranch: Branch | null;
   onBranchSelect: (branch: Branch) => void;
+  onBranchDetails?: (branch: Branch) => void;
+  onGetDirections?: (branch: Branch) => void;
   isLoading: boolean;
 }
 
@@ -14,6 +16,8 @@ export default function BranchList({
   branches,
   selectedBranch,
   onBranchSelect,
+  onBranchDetails,
+  onGetDirections,
   isLoading,
 }: BranchListProps) {
   if (isLoading) {
@@ -70,13 +74,15 @@ export default function BranchList({
   }
 
   return (
-    <div className="space-y-4 pr-2">
+    <div className="space-y-4 pr-2 pb-4">
       {branches.map((branch) => (
         <BranchCard
           key={branch._id}
           branch={branch}
           isSelected={selectedBranch?._id === branch._id}
           onClick={() => onBranchSelect(branch)}
+          onGetDirections={onGetDirections}
+          onViewDetails={onBranchDetails}
         />
       ))}
     </div>

@@ -14,6 +14,13 @@ export interface BranchRaw {
 export interface Branch extends BranchRaw {
   lat: number;
   lng: number;
+  distance?: number; // Distance from user in km (when geolocation is available)
+}
+
+export interface UserLocation {
+  lat: number;
+  lng: number;
+  accuracy?: number;
 }
 
 export interface BranchQueryResponse {

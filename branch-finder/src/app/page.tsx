@@ -1,35 +1,126 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Header from "@/components/Header";
 import SearchBar from "@/components/SearchBar";
 import BranchList from "@/components/BranchList";
+import BranchDetailPanel from "@/components/BranchDetailPanel";
 import { useBranches } from "@/components/useBranches";
+import { useGeolocation } from "@/hooks/useGeolocation";
 import { Branch } from "@/types/branch";
-import { filterBranches, getCountryOptions, getCityOptions, sortBranches } from "@/lib/utils";
+import {
+  filterBranches,
+  getCountryOptions,
+  getCityOptions,
+  sortBranches,
+  addDistanceToBranches,
+} from "@/lib/utils";
 
 // Dynamic import for MapView to avoid SSR issues with Mapbox
 const MapView = dynamic(() => import("@/components/MapView"), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-full bg-[var(--cream)] rounded-2xl flex items-center justify-center">
+    <div className="w-full h-full bg-cream rounded-2xl flex items-center justify-center">
       <div className="text-center">
-        <div className="w-12 h-12 border-4 border-[var(--gold)] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <p className="text-[var(--slate)]">Loading map...</p>
+        <div className="w-12 h-12 border-4 border-gold border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-slate">Loading map...</p>
       </div>
     </div>
   ),
 });
 
+// Wrapper component to handle Suspense for useSearchParams
 export default function BranchFinderPage() {
+  return (
+    <Suspense fallback={<BranchFinderLoading />}>
+      <BranchFinderContent />
+    </Suspense>
+  );
+}
+
+function BranchFinderLoading() {
+  return (
+    <div className="min-h-screen bg-warm-white flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-gold border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-slate text-lg">Loading Branch Finder...</p>
+      </div>
+    </div>
+  );
+}
+
+function BranchFinderContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const { branches, isLoading, error, loadProgress, refetch } = useBranches();
+  const {
+    location: userLocation,
+    isLoading: isLocating,
+    error: locationError,
+    isSupported: isGeolocationSupported,
+    requestLocation,
+    clearLocation,
+  } = useGeolocation();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [countryFilter, setCountryFilter] = useState<string | null>(null);
   const [cityFilter, setCityFilter] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<"name" | "city" | "country">("name");
+  const [sortBy, setSortBy] = useState<"name" | "city" | "country" | "distance">("name");
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
+  const [showDetailPanel, setShowDetailPanel] = useState(false);
   const [activeView, setActiveView] = useState<"list" | "map">("list");
+  const [directionsHandler, setDirectionsHandler] = useState<((branch: Branch) => void) | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Track when component is mounted (client-side only)
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Sync URL params on mount
+  useEffect(() => {
+    const branchId = searchParams.get("branch");
+    const country = searchParams.get("country");
+    const city = searchParams.get("city");
+    const query = searchParams.get("q");
+
+    if (country) setCountryFilter(country);
+    if (city) setCityFilter(city);
+    if (query) setSearchQuery(query);
+
+    // Find and select branch by ID from URL (don't auto-open detail panel)
+    if (branchId && branches.length > 0) {
+      const branch = branches.find((b) => b._id === branchId);
+      if (branch) {
+        setSelectedBranch(branch);
+      }
+    }
+  }, [searchParams, branches]);
+
+  // Update URL when filters change
+  const updateURL = useCallback(
+    (params: { branch?: string; country?: string; city?: string; q?: string }) => {
+      const url = new URL(window.location.href);
+
+      // Clear existing params
+      url.searchParams.delete("branch");
+      url.searchParams.delete("country");
+      url.searchParams.delete("city");
+      url.searchParams.delete("q");
+
+      // Set new params
+      if (params.branch) url.searchParams.set("branch", params.branch);
+      if (params.country) url.searchParams.set("country", params.country);
+      if (params.city) url.searchParams.set("city", params.city);
+      if (params.q) url.searchParams.set("q", params.q);
+
+      router.replace(url.pathname + url.search, { scroll: false });
+    },
+    [router]
+  );
 
   // Get country options for filter dropdown
   const countryOptions = useMemo(() => getCountryOptions(branches), [branches]);
@@ -42,61 +133,225 @@ export default function BranchFinderPage() {
     return getCityOptions(filteredByCountry);
   }, [branches, countryFilter]);
 
-  // Filter and sort branches
+  // Add distances and filter/sort branches
   const filteredBranches = useMemo(() => {
-    const filtered = filterBranches(branches, searchQuery, countryFilter, cityFilter);
+    let branchesWithDistance = branches;
+
+    // Add distance if user location is available
+    if (userLocation) {
+      branchesWithDistance = addDistanceToBranches(branches, userLocation);
+    }
+
+    const filtered = filterBranches(branchesWithDistance, searchQuery, countryFilter, cityFilter);
     return sortBranches(filtered, sortBy);
-  }, [branches, searchQuery, countryFilter, cityFilter, sortBy]);
+  }, [branches, userLocation, searchQuery, countryFilter, cityFilter, sortBy]);
+
+  // Handle "Find Nearest" button click
+  const handleFindNearest = useCallback(() => {
+    requestLocation();
+    setSortBy("distance");
+  }, [requestLocation]);
+
+  // Handle clearing location
+  const handleClearLocation = useCallback(() => {
+    clearLocation();
+    if (sortBy === "distance") {
+      setSortBy("name");
+    }
+  }, [clearLocation, sortBy]);
 
   // Handle branch selection
-  const handleBranchSelect = useCallback((branch: Branch) => {
+  const handleBranchSelect = useCallback(
+    (branch: Branch) => {
+      setSelectedBranch(branch);
+      updateURL({
+        branch: branch._id,
+        country: countryFilter || undefined,
+        city: cityFilter || undefined,
+        q: searchQuery || undefined,
+      });
+
+      // On mobile, switch to map view when selecting a branch
+      if (typeof window !== "undefined" && window.innerWidth < 1024) {
+        setActiveView("map");
+      }
+    },
+    [countryFilter, cityFilter, searchQuery, updateURL]
+  );
+
+  // Handle opening detail panel
+  const handleOpenDetails = useCallback((branch: Branch) => {
     setSelectedBranch(branch);
-    // On mobile, switch to map view when selecting a branch
-    if (typeof window !== "undefined" && window.innerWidth < 1024) {
-      setActiveView("map");
-    }
+    setShowDetailPanel(true);
   }, []);
+
+  // Handle closing detail panel
+  const handleCloseDetails = useCallback(() => {
+    setShowDetailPanel(false);
+    updateURL({
+      country: countryFilter || undefined,
+      city: cityFilter || undefined,
+      q: searchQuery || undefined,
+    });
+  }, [countryFilter, cityFilter, searchQuery, updateURL]);
 
   // Handle search change
-  const handleSearchChange = useCallback((query: string) => {
-    setSearchQuery(query);
-    setSelectedBranch(null);
-  }, []);
+  const handleSearchChange = useCallback(
+    (query: string) => {
+      setSearchQuery(query);
+      setSelectedBranch(null);
+      updateURL({
+        country: countryFilter || undefined,
+        city: cityFilter || undefined,
+        q: query || undefined,
+      });
+    },
+    [countryFilter, cityFilter, updateURL]
+  );
 
   // Handle country change
-  const handleCountryChange = useCallback((code: string | null) => {
-    setCountryFilter(code);
-    setCityFilter(null); // Reset city when country changes
-    setSelectedBranch(null);
-  }, []);
+  const handleCountryChange = useCallback(
+    (code: string | null) => {
+      setCountryFilter(code);
+      setCityFilter(null);
+      setSelectedBranch(null);
+      updateURL({
+        country: code || undefined,
+        q: searchQuery || undefined,
+      });
+    },
+    [searchQuery, updateURL]
+  );
 
   // Handle city change
-  const handleCityChange = useCallback((city: string | null) => {
-    setCityFilter(city);
-    setSelectedBranch(null);
-  }, []);
+  const handleCityChange = useCallback(
+    (city: string | null) => {
+      setCityFilter(city);
+      setSelectedBranch(null);
+      updateURL({
+        country: countryFilter || undefined,
+        city: city || undefined,
+        q: searchQuery || undefined,
+      });
+    },
+    [countryFilter, searchQuery, updateURL]
+  );
 
   // Handle sort change
-  const handleSortChange = useCallback((sort: "name" | "city" | "country") => {
+  const handleSortChange = useCallback((sort: "name" | "city" | "country" | "distance") => {
     setSortBy(sort);
   }, []);
 
+  // Handle directions ready from MapView
+  const handleDirectionsReady = useCallback((handler: (branch: Branch) => void) => {
+    setDirectionsHandler(() => handler);
+  }, []);
+
+  // Handle get directions from BranchCard
+  const handleGetDirections = useCallback(
+    (branch: Branch) => {
+      if (directionsHandler && userLocation) {
+        // Select the branch and switch to map view on mobile
+        setSelectedBranch(branch);
+        if (typeof window !== "undefined" && window.innerWidth < 1024) {
+          setActiveView("map");
+        }
+        // Trigger directions on the Mapbox map
+        directionsHandler(branch);
+      }
+    },
+    [directionsHandler, userLocation]
+  );
+
   return (
-    <div className="min-h-screen bg-[var(--warm-white)]">
+    <div className="min-h-screen bg-warm-white">
       <Header />
 
       {/* Hero Section */}
-      <section className="pt-20 sm:pt-24 pb-8 bg-gradient-to-br from-[var(--midnight)] via-[var(--navy)] to-[var(--deep-teal)]">
+      <section className="pt-20 sm:pt-24 pb-8 bg-gradient-to-br from-midnight via-navy to-deep-teal">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
           <div className="text-center mb-8">
-            <h1 className="font-[var(--font-playfair)] text-3xl sm:text-4xl lg:text-5xl font-bold text-[var(--warm-white)] mb-4">
+            <h1 className="font-[family-name:var(--font-playfair)] text-3xl sm:text-4xl lg:text-5xl font-bold text-warm-white mb-4">
               Find Your Nearest Branch
             </h1>
-            <p className="text-[var(--cream)] text-lg max-w-2xl mx-auto opacity-90">
+            <p className="text-[clamp(1.1rem,2vw,1.3rem)] text-cream font-light tracking-[0.5px] opacity-95 max-w-2xl mx-auto">
               With over 1,000 branches worldwide, exceptional banking service is
               always nearby. Search by location, city, or country.
             </p>
           </div>
+
+          {/* Find Nearest Button */}
+          {isMounted && isGeolocationSupported && (
+            <div className="flex justify-center mb-6">
+              {!userLocation ? (
+                <button
+                  onClick={handleFindNearest}
+                  disabled={isLocating}
+                  className="flex items-center gap-2 px-6 py-3 bg-gold text-midnight font-medium rounded-xl hover:bg-gold/90 transition-colors disabled:opacity-70 disabled:cursor-not-allowed shadow-lg"
+                >
+                  {isLocating ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-midnight border-t-transparent rounded-full animate-spin"></div>
+                      <span>Finding your location...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                      </svg>
+                      <span>Use My Location</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl text-white">
+                    <svg className="w-5 h-5 text-gold" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z" />
+                    </svg>
+                    <span className="text-sm">Location active - showing distances</span>
+                  </div>
+                  <button
+                    onClick={handleClearLocation}
+                    className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                    title="Clear location"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Location Error */}
+          {locationError && (
+            <div className="flex justify-center mb-6">
+              <div className="flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-200 rounded-xl text-sm">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <span>{locationError}</span>
+              </div>
+            </div>
+          )}
 
           {/* Search Bar */}
           <div className="max-w-3xl mx-auto">
@@ -112,6 +367,7 @@ export default function BranchFinderPage() {
               selectedCountry={countryFilter}
               selectedCity={cityFilter}
               sortBy={sortBy}
+              hasUserLocation={!!userLocation}
             />
           </div>
         </div>
@@ -119,16 +375,16 @@ export default function BranchFinderPage() {
 
       {/* Loading Progress */}
       {isLoading && loadProgress > 0 && loadProgress < 1 && (
-        <div className="bg-[var(--cream)] px-4 py-3">
+        <div className="bg-cream px-4 py-3">
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center gap-4">
               <div className="flex-1 h-2 bg-white rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-[var(--gold)] transition-all duration-300"
+                  className="h-full bg-gold transition-all duration-300"
                   style={{ width: `${loadProgress * 100}%` }}
                 />
               </div>
-              <span className="text-sm text-[var(--slate)] whitespace-nowrap">
+              <span className="text-sm text-slate whitespace-nowrap">
                 Loading branches... {Math.round(loadProgress * 100)}%
               </span>
             </div>
@@ -163,14 +419,14 @@ export default function BranchFinderPage() {
       )}
 
       {/* Mobile View Toggle */}
-      <div className="lg:hidden sticky top-16 z-40 bg-[var(--warm-white)] border-b border-[var(--cream)] px-4 py-3">
+      <div className="lg:hidden sticky top-16 z-40 bg-warm-white border-b border-cream px-4 py-3">
         <div className="flex gap-2">
           <button
             onClick={() => setActiveView("list")}
             className={`flex-1 py-2 px-4 rounded-xl font-medium text-sm transition-colors ${
               activeView === "list"
-                ? "bg-[var(--midnight)] text-[var(--warm-white)]"
-                : "bg-[var(--cream)] text-[var(--midnight)]"
+                ? "bg-midnight text-warm-white"
+                : "bg-cream text-midnight"
             }`}
             suppressHydrationWarning
           >
@@ -190,8 +446,8 @@ export default function BranchFinderPage() {
             onClick={() => setActiveView("map")}
             className={`flex-1 py-2 px-4 rounded-xl font-medium text-sm transition-colors ${
               activeView === "map"
-                ? "bg-[var(--midnight)] text-[var(--warm-white)]"
-                : "bg-[var(--cream)] text-[var(--midnight)]"
+                ? "bg-midnight text-warm-white"
+                : "bg-cream text-midnight"
             }`}
             suppressHydrationWarning
           >
@@ -215,48 +471,178 @@ export default function BranchFinderPage() {
         <div className="lg:grid lg:grid-cols-5 lg:gap-8 lg:h-[calc(100vh-340px)] lg:min-h-[600px]">
           {/* Branch List */}
           <div
-            className={`lg:col-span-2 lg:overflow-y-auto lg:pr-2 ${
-              activeView === "list" ? "block" : "hidden lg:block"
+            className={`lg:col-span-2 lg:overflow-y-auto lg:pr-2 lg:h-full ${
+              activeView === "list" ? "block h-[calc(100vh-280px)] overflow-y-auto" : "hidden lg:block"
             }`}
           >
             <BranchList
               branches={filteredBranches}
               selectedBranch={selectedBranch}
               onBranchSelect={handleBranchSelect}
+              onBranchDetails={handleOpenDetails}
+              onGetDirections={handleGetDirections}
               isLoading={isLoading}
             />
           </div>
 
           {/* Map View */}
           <div
-            className={`lg:col-span-3 h-[60vh] lg:h-full ${
-              activeView === "map" ? "block" : "hidden lg:block"
+            className={`lg:col-span-3 lg:h-full ${
+              activeView === "map" ? "block h-[calc(100vh-280px)]" : "hidden lg:block"
             }`}
           >
             <MapView
               branches={filteredBranches}
               selectedBranch={selectedBranch}
               onBranchSelect={handleBranchSelect}
+              userLocation={userLocation}
+              onDirectionsReady={handleDirectionsReady}
             />
           </div>
         </div>
       </main>
 
+      {/* Branch Detail Panel */}
+      {showDetailPanel && (
+        <BranchDetailPanel
+          branch={selectedBranch}
+          onClose={handleCloseDetails}
+          userLocation={userLocation}
+          onGetDirections={handleGetDirections}
+        />
+      )}
+
+      {/* Articles Section */}
+      <section className="py-16 sm:py-20 lg:py-24 px-[5%] bg-warm-white">
+        <div className="max-w-[1400px] mx-auto">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="font-[family-name:var(--font-playfair)] text-[clamp(2.5rem,4vw,3.5rem)] font-bold text-midnight mb-4 tracking-tight leading-[1.1]">
+              Banking Resources
+            </h2>
+            <p className="text-slate text-[1.1rem] max-w-2xl mx-auto font-light leading-relaxed">
+              Expert insights and guides to help you make smarter financial decisions.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 sm:gap-10 lg:gap-12">
+            {/* Article 1 */}
+            <article className="bg-cream rounded-[25px] overflow-hidden transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] hover:-translate-y-[10px] hover:shadow-[0_30px_60px_rgba(10,22,40,0.15)]">
+              <div className="h-[250px] bg-gradient-to-br from-midnight to-deep-teal relative">
+                <span className="absolute top-6 left-6 bg-gold text-midnight px-5 py-2 rounded-[20px] text-[0.85rem] font-semibold uppercase tracking-[0.5px]">
+                  Personal Finance
+                </span>
+              </div>
+              <div className="p-6 sm:p-8 lg:p-10 flex flex-col">
+                <div className="flex gap-4 sm:gap-6 mb-4 sm:mb-6 text-[0.9rem] text-slate">
+                  <span>December 8, 2024</span>
+                  <span>5 min read</span>
+                </div>
+                <h3 className="font-[family-name:var(--font-playfair)] text-[1.8rem] font-semibold text-midnight mb-4 leading-[1.3]">
+                  Building Your Emergency Fund
+                </h3>
+                <p className="text-slate leading-[1.8] mb-8 font-light flex-1">
+                  Learn how to build a safety net that protects you from unexpected expenses and financial emergencies.
+                </p>
+                <a href="#" className="text-gold font-medium inline-flex items-center gap-2 transition-all duration-300 hover:gap-4">
+                  Read More →
+                </a>
+              </div>
+            </article>
+
+            {/* Article 2 */}
+            <article className="bg-cream rounded-[25px] overflow-hidden transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] hover:-translate-y-[10px] hover:shadow-[0_30px_60px_rgba(10,22,40,0.15)]">
+              <div className="h-[250px] bg-gradient-to-br from-deep-teal to-sage relative">
+                <span className="absolute top-6 left-6 bg-gold text-midnight px-5 py-2 rounded-[20px] text-[0.85rem] font-semibold uppercase tracking-[0.5px]">
+                  Investing
+                </span>
+              </div>
+              <div className="p-6 sm:p-8 lg:p-10 flex flex-col">
+                <div className="flex gap-4 sm:gap-6 mb-4 sm:mb-6 text-[0.9rem] text-slate">
+                  <span>December 5, 2024</span>
+                  <span>8 min read</span>
+                </div>
+                <h3 className="font-[family-name:var(--font-playfair)] text-[1.8rem] font-semibold text-midnight mb-4 leading-[1.3]">
+                  Diversification Strategies for 2025
+                </h3>
+                <p className="text-slate leading-[1.8] mb-8 font-light flex-1">
+                  Navigate market volatility with smart diversification and balanced asset allocation strategies.
+                </p>
+                <a href="#" className="text-gold font-medium inline-flex items-center gap-2 transition-all duration-300 hover:gap-4">
+                  Read More →
+                </a>
+              </div>
+            </article>
+
+            {/* Article 3 */}
+            <article className="bg-cream rounded-[25px] overflow-hidden transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] hover:-translate-y-[10px] hover:shadow-[0_30px_60px_rgba(10,22,40,0.15)]">
+              <div className="h-[250px] bg-gradient-to-br from-navy to-midnight relative">
+                <span className="absolute top-6 left-6 bg-gold text-midnight px-5 py-2 rounded-[20px] text-[0.85rem] font-semibold uppercase tracking-[0.5px]">
+                  Business
+                </span>
+              </div>
+              <div className="p-6 sm:p-8 lg:p-10 flex flex-col">
+                <div className="flex gap-4 sm:gap-6 mb-4 sm:mb-6 text-[0.9rem] text-slate">
+                  <span>December 3, 2024</span>
+                  <span>6 min read</span>
+                </div>
+                <h3 className="font-[family-name:var(--font-playfair)] text-[1.8rem] font-semibold text-midnight mb-4 leading-[1.3]">
+                  Cash Flow Management for Small Businesses
+                </h3>
+                <p className="text-slate leading-[1.8] mb-8 font-light flex-1">
+                  Master the art of cash flow management with proven techniques for business growth.
+                </p>
+                <a href="#" className="text-gold font-medium inline-flex items-center gap-2 transition-all duration-300 hover:gap-4">
+                  Read More →
+                </a>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      {/* Newsletter Section - Stay Informed */}
+      <section className="py-16 sm:py-20 lg:py-24 px-[5%] bg-cream">
+        <div className="max-w-[700px] mx-auto text-center">
+          <h2 className="font-[family-name:var(--font-playfair)] text-[clamp(2.5rem,4vw,3.5rem)] font-bold text-midnight mb-6 tracking-tight leading-[1.1]">
+            Stay Informed
+          </h2>
+          <p className="text-slate text-[1.1rem] mb-10 font-light leading-relaxed">
+            Subscribe to our newsletter for weekly financial insights, market updates, and exclusive banking tips delivered to your inbox.
+          </p>
+          <form className="flex flex-col sm:flex-row gap-4 max-w-[500px] mx-auto" suppressHydrationWarning>
+            <input
+              type="email"
+              placeholder="Enter your email address"
+              className="flex-1 px-6 py-4 border-2 border-midnight rounded-[50px] font-[family-name:var(--font-jost)] text-base outline-none transition-all duration-300 focus:border-gold focus:shadow-[0_0_0_4px_rgba(212,175,55,0.1)]"
+              required
+              suppressHydrationWarning
+            />
+            <button
+              type="submit"
+              className="px-8 py-4 bg-gold text-midnight rounded-[50px] font-medium text-base transition-all duration-300 hover:bg-midnight hover:text-warm-white whitespace-nowrap"
+              suppressHydrationWarning
+            >
+              Subscribe
+            </button>
+          </form>
+        </div>
+      </section>
+
       {/* Footer */}
-      <footer className="bg-[var(--midnight)] text-[var(--cream)] py-8 mt-12">
+      <footer className="bg-midnight text-cream py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <p className="text-sm opacity-80">
               &copy; 2024 Brightstream Bank. All rights reserved. Member FDIC.
             </p>
             <div className="flex gap-6 text-sm">
-              <a href="#" className="hover:text-[var(--gold)] transition-colors">
+              <a href="#" className="hover:text-gold transition-colors">
                 Privacy Policy
               </a>
-              <a href="#" className="hover:text-[var(--gold)] transition-colors">
+              <a href="#" className="hover:text-gold transition-colors">
                 Terms of Service
               </a>
-              <a href="#" className="hover:text-[var(--gold)] transition-colors">
+              <a href="#" className="hover:text-gold transition-colors">
                 Contact
               </a>
             </div>

@@ -1,4 +1,4 @@
-import { Branch, BranchRaw, CountryOption } from "@/types/branch";
+import { Branch, BranchRaw, CountryOption, UserLocation } from "@/types/branch";
 
 /**
  * Parse coordinates string "lat, lng" into separate lat/lng numbers
@@ -123,7 +123,7 @@ export function filterBranches(
  */
 export function sortBranches(
   branches: Branch[],
-  sortBy: "name" | "city" | "country"
+  sortBy: "name" | "city" | "country" | "distance"
 ): Branch[] {
   const sorted = [...branches];
 
@@ -134,9 +134,29 @@ export function sortBranches(
       return sorted.sort((a, b) => a.City.localeCompare(b.City));
     case "country":
       return sorted.sort((a, b) => a.Country.localeCompare(b.Country));
+    case "distance":
+      return sorted.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
     default:
       return sorted;
   }
+}
+
+/**
+ * Add distance to branches from user location
+ */
+export function addDistanceToBranches(
+  branches: Branch[],
+  userLocation: UserLocation
+): Branch[] {
+  return branches.map((branch) => ({
+    ...branch,
+    distance: calculateDistance(
+      userLocation.lat,
+      userLocation.lng,
+      branch.lat,
+      branch.lng
+    ),
+  }));
 }
 
 /**

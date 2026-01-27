@@ -8,14 +8,15 @@ interface SearchBarProps {
   onSearchChange: (query: string) => void;
   onCountryChange: (countryCode: string | null) => void;
   onCityChange: (city: string | null) => void;
-  onSortChange: (sortBy: "name" | "city" | "country") => void;
+  onSortChange: (sortBy: "name" | "city" | "country" | "distance") => void;
   countries: CountryOption[];
   cities: Array<{ city: string; count: number }>;
   totalResults: number;
   totalBranches: number;
   selectedCountry: string | null;
   selectedCity: string | null;
-  sortBy: "name" | "city" | "country";
+  sortBy: "name" | "city" | "country" | "distance";
+  hasUserLocation?: boolean;
 }
 
 export default function SearchBar({
@@ -30,6 +31,7 @@ export default function SearchBar({
   selectedCountry,
   selectedCity,
   sortBy,
+  hasUserLocation = false,
 }: SearchBarProps) {
   const [searchValue, setSearchValue] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -112,6 +114,7 @@ export default function SearchBar({
               ? "bg-[var(--gold)] text-[var(--midnight)]"
               : "bg-white text-[var(--midnight)] hover:bg-[var(--cream)]"
           }`}
+          suppressHydrationWarning
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -204,10 +207,11 @@ export default function SearchBar({
               <div className="relative">
                 <select
                   value={sortBy}
-                  onChange={(e) => onSortChange(e.target.value as "name" | "city" | "country")}
+                  onChange={(e) => onSortChange(e.target.value as "name" | "city" | "country" | "distance")}
                   className="w-full px-4 py-2.5 bg-[var(--cream)]/50 border border-[var(--cream)] rounded-lg text-[var(--midnight)] focus:border-[var(--gold)] focus:ring-0 outline-none appearance-none cursor-pointer"
                   suppressHydrationWarning
                 >
+                  {hasUserLocation && <option value="distance">Distance (Nearest)</option>}
                   <option value="name">Branch Name</option>
                   <option value="city">City</option>
                   <option value="country">Country</option>

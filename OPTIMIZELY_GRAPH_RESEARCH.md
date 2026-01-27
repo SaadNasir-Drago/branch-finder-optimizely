@@ -49,7 +49,7 @@ The `Branch` content type has the following fields available:
 - `Created` (String)
 - `StartPublish` (String)
 
-### ⚠️ Fields NOT Available (appeared in introspection but error when queried)
+### Fields NOT Available (appeared in introspection but error when queried)
 - `Address` - Use `Street` instead
 - `Postcode` - Use `ZipCode` instead
 - `Latitude` - Parse from `Coordinates` field

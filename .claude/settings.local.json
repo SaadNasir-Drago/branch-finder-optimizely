@@ -6,7 +6,15 @@
       "WebFetch(domain:cg.optimizely.com)",
       "Bash(npx create-next-app@latest branch-finder --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --yes)",
       "Bash(npm install:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(findstr:*)",
+      "Bash(powershell -Command \"\\(Invoke-WebRequest -Uri ''https://cg.optimizely.com/content/v2?auth=iQEyR1jR1cBG5mnLQoRotCyNmKUgaO0DT5cRbJPKA3oZGGQo'' -Method POST -Headers @{''Content-Type''=''application/json''} -Body ''{\"\"query\"\":\"\"query { Branch\\(limit: 1000\\) { items { Name City Coordinates } } }\"\"}''\\).Content | Select-String -Pattern ''Cape'' -AllMatches\")",
+      "Bash(powershell -Command \"$response = Invoke-RestMethod -Uri ''https://cg.optimizely.com/content/v2?auth=iQEyR1jR1cBG5mnLQoRotCyNmKUgaO0DT5cRbJPKA3oZGGQo'' -Method POST -Headers @{''Content-Type''=''application/json''} -Body ''{\"\"query\"\":\"\"query { Branch\\(limit: 100, skip: 0\\) { items { Name City Coordinates } } }\"\"}''; $response.data.Branch.items | Where-Object { $_City -like ''*Cape*'' } | Format-Table\")",
+      "Bash(tr:*)",
+      "WebFetch(domain:nominatim.openstreetmap.org)",
+      "WebFetch(domain:www.nngroup.com)",
+      "Bash(npm run dev:*)",
+      "WebFetch(domain:docs.mapbox.com)"
     ]
   }
 }

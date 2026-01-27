@@ -1,31 +1,61 @@
 "use client";
 
 import { Branch } from "@/types/branch";
+import { formatDistance } from "@/lib/utils";
 
 interface BranchCardProps {
   branch: Branch;
   isSelected: boolean;
   onClick: () => void;
+  onGetDirections?: (branch: Branch) => void;
+  onViewDetails?: (branch: Branch) => void;
 }
 
-export default function BranchCard({ branch, isSelected, onClick }: BranchCardProps) {
+export default function BranchCard({ branch, isSelected, onClick, onGetDirections, onViewDetails }: BranchCardProps) {
+  const handleGetDirections = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onGetDirections) {
+      onGetDirections(branch);
+    }
+  };
+
+  const handleViewDetails = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onViewDetails) {
+      onViewDetails(branch);
+    }
+  };
+
   return (
     <div
       onClick={onClick}
-      className={`p-5 rounded-2xl cursor-pointer transition-all duration-200 ${
+      className={`p-5 rounded-2xl cursor-pointer transition-all duration-200 border ${
         isSelected
-          ? "bg-[var(--midnight)] text-[var(--warm-white)] shadow-lg shadow-[var(--midnight)]/20"
-          : "bg-[var(--cream)] hover:bg-white hover:shadow-lg hover:-translate-y-1"
+          ? "bg-[var(--midnight)] text-[var(--warm-white)] shadow-lg shadow-[var(--midnight)]/20 border-[var(--midnight)]"
+          : "bg-[var(--cream)] hover:bg-white hover:shadow-lg hover:-translate-y-1 border-[var(--slate)]/20"
       }`}
     >
-      {/* Branch Name */}
-      <h3
-        className={`font-[var(--font-playfair)] text-lg font-semibold mb-2 ${
-          isSelected ? "text-[var(--warm-white)]" : "text-[var(--midnight)]"
-        }`}
-      >
-        {branch.Name}
-      </h3>
+      {/* Header with Name and Distance */}
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <h3
+          className={`font-[var(--font-playfair)] text-lg font-semibold ${
+            isSelected ? "text-[var(--warm-white)]" : "text-[var(--midnight)]"
+          }`}
+        >
+          {branch.Name}
+        </h3>
+        {branch.distance !== undefined && (
+          <span
+            className={`text-sm font-medium whitespace-nowrap px-2 py-0.5 rounded-full ${
+              isSelected
+                ? "bg-[var(--gold)] text-[var(--midnight)]"
+                : "bg-[var(--deep-teal)] text-white"
+            }`}
+          >
+            {formatDistance(branch.distance)}
+          </span>
+        )}
+      </div>
 
       {/* Address */}
       <div className={`text-sm mb-3 ${isSelected ? "text-[var(--cream)]" : "text-[var(--slate)]"}`}>
@@ -81,15 +111,53 @@ export default function BranchCard({ branch, isSelected, onClick }: BranchCardPr
         </a>
       </div>
 
-      {/* Selected Indicator */}
-      {isSelected && (
-        <div className="mt-3 pt-3 border-t border-[var(--navy)] flex items-center gap-2 text-[var(--gold)] text-sm">
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z" />
-          </svg>
-          <span>Viewing on map</span>
-        </div>
-      )}
+      {/* Actions Row */}
+      <div className="mt-3 pt-3 border-t border-[var(--cream)] flex items-center justify-between gap-2">
+        {/* View Details Button */}
+        {onViewDetails && (
+          <button
+            onClick={handleViewDetails}
+            className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${
+              isSelected
+                ? "bg-[var(--warm-white)]/20 text-[var(--warm-white)] hover:bg-[var(--warm-white)]/30"
+                : "bg-[var(--cream)] text-[var(--midnight)] hover:bg-[var(--slate)]/10"
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Details
+          </button>
+        )}
+
+        {/* Get Directions Button */}
+        {onGetDirections && (
+          <button
+            onClick={handleGetDirections}
+            className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${
+              isSelected
+                ? "bg-[var(--gold)] text-[var(--midnight)] hover:bg-[var(--cream)]"
+                : "bg-[var(--midnight)] text-white hover:bg-[var(--navy)]"
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+            Directions
+          </button>
+        )}
+      </div>
     </div>
   );
 }
