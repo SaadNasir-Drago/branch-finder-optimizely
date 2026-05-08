@@ -88,11 +88,9 @@ function BranchFinderContent() {
   );
   const pendingDirectionsBranchRef = useRef<Branch | null>(null);
 
-  // Track when component is mounted (client-side only).
-  // The "did-mount" flag is the canonical use of setState-in-effect — it's the
-  // only way to detect post-hydration on the client without an SSR mismatch.
+  // Track when component is mounted (client-side only) so geolocation UI
+  // doesn't render during SSR and cause a hydration mismatch.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMounted(true);
   }, []);
 
@@ -101,7 +99,6 @@ function BranchFinderContent() {
   // useState initializer only runs once, so without this effect navigating
   // to a `?branch=<id>` URL on an already-mounted page wouldn't narrow the list.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPinnedBranchId(searchParams.get("branch"));
   }, [searchParams]);
 
@@ -109,7 +106,6 @@ function BranchFinderContent() {
     if (!pinnedBranchId || branches.length === 0) return;
     const branch = branches.find((b) => b._id === pinnedBranchId);
     if (branch) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedBranch(branch);
     }
   }, [branches, pinnedBranchId]);

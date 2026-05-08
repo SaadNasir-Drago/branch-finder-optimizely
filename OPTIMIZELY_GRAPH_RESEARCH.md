@@ -2,7 +2,7 @@
 
 ## API Overview
 
-**GraphQL Endpoint:** `https://cg.optimizely.com/content/v2?auth=iQEyR1jR1cBG5mnLQoRotCyNmKUgaO0DT5cRbJPKA3oZGGQo`
+**GraphQL Endpoint:** `https://cg.optimizely.com/content/v2?auth=<TOKEN>` (configured via `NEXT_PUBLIC_GRAPHQL_ENDPOINT`)
 
 **Authentication:** Single-key authentication (included in URL query parameter `auth`)
 
