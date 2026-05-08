@@ -8,7 +8,12 @@ export function parseCoordinates(coordString: string): { lat: number; lng: numbe
     return null;
   }
 
-  return { lat: parts[0], lng: parts[1] };
+  const [lat, lng] = parts;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    return null;
+  }
+
+  return { lat, lng };
 }
 
 export function transformBranch(raw: BranchRaw): Branch | null {
@@ -120,11 +125,23 @@ export function sortBranches(
   }
 }
 
+// Cache keyed by the branches array reference; value is keyed by user lat/lng.
+// useBranches returns a stable array reference until refetch, so this cache
+// avoids recomputing 1000 distances on every geolocation tick or unrelated re-render.
+const distanceCache = new WeakMap<Branch[], { key: string; result: Branch[] }>();
+
 export function addDistanceToBranches(
   branches: Branch[],
   userLocation: UserLocation
 ): Branch[] {
-  return branches.map((branch) => ({
+  // Round to ~10m to absorb tiny GPS jitter between ticks
+  const key = `${userLocation.lat.toFixed(4)},${userLocation.lng.toFixed(4)}`;
+  const cached = distanceCache.get(branches);
+  if (cached && cached.key === key) {
+    return cached.result;
+  }
+
+  const result = branches.map((branch) => ({
     ...branch,
     distance: calculateDistance(
       userLocation.lat,
@@ -133,6 +150,9 @@ export function addDistanceToBranches(
       branch.lng
     ),
   }));
+
+  distanceCache.set(branches, { key, result });
+  return result;
 }
 
 // Haversine formula - returns distance in kilometers

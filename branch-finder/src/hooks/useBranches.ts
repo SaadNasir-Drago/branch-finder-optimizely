@@ -6,10 +6,9 @@ import { transformBranches } from "@/lib/utils";
 
 const BATCH_SIZE = 100;
 const TOTAL_BRANCHES = 1000;
+const MAX_BATCH_RETRIES = 2;
 
-const GRAPHQL_ENDPOINT =
-  process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT ||
-  "https://cg.optimizely.com/content/v2?auth=iQEyR1jR1cBG5mnLQoRotCyNmKUgaO0DT5cRbJPKA3oZGGQo";
+const GRAPHQL_ENDPOINT = process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT;
 
 const BRANCHES_QUERY = `
   query GetBranches($limit: Int!, $skip: Int!) {
@@ -42,6 +41,12 @@ interface GraphQLResponse {
 }
 
 async function fetchBranches(skip: number, limit: number): Promise<GraphQLResponse> {
+  if (!GRAPHQL_ENDPOINT) {
+    throw new Error(
+      "NEXT_PUBLIC_GRAPHQL_ENDPOINT is not set. Add it to .env.local before running the app."
+    );
+  }
+
   const response = await fetch(GRAPHQL_ENDPOINT, {
     method: "POST",
     headers: {
@@ -57,7 +62,30 @@ async function fetchBranches(skip: number, limit: number): Promise<GraphQLRespon
     throw new Error(`HTTP error! status: ${response.status}`);
   }
 
-  return response.json();
+  const json = (await response.json()) as GraphQLResponse;
+  if (json.errors?.length) {
+    throw new Error(json.errors[0]?.message || "GraphQL error");
+  }
+  return json;
+}
+
+async function fetchBranchesWithRetry(
+  skip: number,
+  limit: number,
+  retries = MAX_BATCH_RETRIES
+): Promise<GraphQLResponse> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fetchBranches(skip, limit);
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 200 * Math.pow(2, attempt)));
+      }
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("Batch fetch failed");
 }
 
 export function useBranches() {
@@ -72,12 +100,8 @@ export function useBranches() {
       setError(null);
       setLoadProgress(0);
 
-      // First fetch to get total count
-      const firstResult = await fetchBranches(0, BATCH_SIZE);
-
-      if (firstResult.errors) {
-        throw new Error(firstResult.errors[0]?.message || "GraphQL error");
-      }
+      // First fetch must succeed — without it we don't know the total batch count
+      const firstResult = await fetchBranchesWithRetry(0, BATCH_SIZE);
 
       if (!firstResult.data?.Branch) {
         throw new Error("No branch data received");
@@ -86,37 +110,48 @@ export function useBranches() {
       const total = firstResult.data.Branch.total || TOTAL_BRANCHES;
       const batches = Math.ceil(total / BATCH_SIZE);
       const allItems: Branch[] = [];
+      const failedBatches: number[] = [];
 
-      // Process first batch
-      const firstBatch = transformBranches(firstResult.data.Branch.items);
-      allItems.push(...firstBatch);
+      allItems.push(...transformBranches(firstResult.data.Branch.items));
       setLoadProgress(1 / batches);
 
-      // Fetch remaining batches in parallel (groups of 3 for speed)
-      const remainingBatches = [];
-      for (let i = 1; i < batches; i++) {
-        remainingBatches.push(i);
-      }
+      const remainingBatches: number[] = [];
+      for (let i = 1; i < batches; i++) remainingBatches.push(i);
 
-      // Process in chunks of 3 parallel requests
       const chunkSize = 3;
       for (let i = 0; i < remainingBatches.length; i += chunkSize) {
         const chunk = remainingBatches.slice(i, i + chunkSize);
         const results = await Promise.all(
-          chunk.map((batchIndex) => fetchBranches(batchIndex * BATCH_SIZE, BATCH_SIZE))
+          chunk.map(async (batchIndex) => {
+            try {
+              const r = await fetchBranchesWithRetry(batchIndex * BATCH_SIZE, BATCH_SIZE);
+              return { batchIndex, result: r, ok: true as const };
+            } catch (err) {
+              console.error(`Batch ${batchIndex} failed:`, err);
+              return { batchIndex, result: null, ok: false as const };
+            }
+          })
         );
 
-        for (const result of results) {
-          if (result.data?.Branch?.items) {
-            const batch = transformBranches(result.data.Branch.items);
-            allItems.push(...batch);
+        for (const entry of results) {
+          if (!entry.ok || !entry.result?.data?.Branch?.items) {
+            failedBatches.push(entry.batchIndex);
+            continue;
           }
+          allItems.push(...transformBranches(entry.result.data.Branch.items));
         }
 
         setLoadProgress((i + chunk.length + 1) / batches);
       }
 
       setAllBranches(allItems);
+      if (failedBatches.length > 0) {
+        setError(
+          new Error(
+            `Loaded ${allItems.length} branches, but ${failedBatches.length} batch(es) failed.`
+          )
+        );
+      }
       setIsLoading(false);
     } catch (err) {
       console.error("Failed to load branches:", err);

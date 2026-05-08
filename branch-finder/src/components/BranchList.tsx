@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Branch } from "@/types/branch";
 import BranchCard from "./BranchCard";
 
@@ -12,7 +13,7 @@ interface BranchListProps {
   isLoading: boolean;
 }
 
-export default function BranchList({
+function BranchListImpl({
   branches,
   selectedBranch,
   onBranchSelect,
@@ -20,9 +21,11 @@ export default function BranchList({
   onGetDirections,
   isLoading,
 }: BranchListProps) {
-  if (isLoading) {
+  // Show skeleton while loading and there's nothing to display yet.
+  // Once partial branches stream in we show those (better than skeleton).
+  if (isLoading && branches.length === 0) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4" aria-busy="true" aria-live="polite">
         {[...Array(6)].map((_, i) => (
           <div
             key={i}
@@ -44,7 +47,7 @@ export default function BranchList({
     );
   }
 
-  if (branches.length === 0) {
+  if (!isLoading && branches.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
         <div className="w-16 h-16 bg-[var(--cream)] rounded-full flex items-center justify-center mb-4">
@@ -73,14 +76,44 @@ export default function BranchList({
     );
   }
 
+  const selectedIndex = selectedBranch
+    ? branches.findIndex((b) => b._id === selectedBranch._id)
+    : -1;
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (branches.length === 0) return;
+
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const direction = e.key === "ArrowDown" ? 1 : -1;
+      const startIndex = selectedIndex >= 0 ? selectedIndex : 0;
+      const nextIndex = Math.max(0, Math.min(branches.length - 1, startIndex + direction));
+      const next = branches[nextIndex];
+      if (next) onBranchSelect(next);
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      onBranchSelect(branches[0]);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      onBranchSelect(branches[branches.length - 1]);
+    }
+  };
+
   return (
-    <div className="space-y-4 pr-2 pb-4">
+    <div
+      role="listbox"
+      aria-label="Branch results"
+      aria-activedescendant={selectedBranch ? `branch-${selectedBranch._id}` : undefined}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      className="space-y-4 pr-2 pb-4 outline-none focus-visible:ring-2 focus-visible:ring-gold rounded-md"
+    >
       {branches.map((branch) => (
         <BranchCard
           key={branch._id}
           branch={branch}
           isSelected={selectedBranch?._id === branch._id}
-          onClick={() => onBranchSelect(branch)}
+          onSelect={onBranchSelect}
           onGetDirections={onGetDirections}
           onViewDetails={onBranchDetails}
         />
@@ -88,3 +121,6 @@ export default function BranchList({
     </div>
   );
 }
+
+const BranchList = memo(BranchListImpl);
+export default BranchList;

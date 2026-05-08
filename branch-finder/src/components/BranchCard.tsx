@@ -1,17 +1,27 @@
 "use client";
 
+import { memo } from "react";
 import { Branch } from "@/types/branch";
 import { formatDistance } from "@/lib/utils";
 
 interface BranchCardProps {
   branch: Branch;
   isSelected: boolean;
-  onClick: () => void;
+  onSelect: (branch: Branch) => void;
   onGetDirections?: (branch: Branch) => void;
   onViewDetails?: (branch: Branch) => void;
 }
 
-export default function BranchCard({ branch, isSelected, onClick, onGetDirections, onViewDetails }: BranchCardProps) {
+function BranchCardImpl({ branch, isSelected, onSelect, onGetDirections, onViewDetails }: BranchCardProps) {
+  const handleSelect = () => onSelect(branch);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onSelect(branch);
+    }
+  };
+
   const handleGetDirections = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (onGetDirections) {
@@ -28,7 +38,11 @@ export default function BranchCard({ branch, isSelected, onClick, onGetDirection
 
   return (
     <div
-      onClick={onClick}
+      id={`branch-${branch._id}`}
+      role="option"
+      aria-selected={isSelected}
+      onClick={handleSelect}
+      onKeyDown={handleKeyDown}
       className={`p-5 rounded-2xl cursor-pointer transition-all duration-200 border ${
         isSelected
           ? "bg-[var(--midnight)] text-[var(--warm-white)] shadow-lg shadow-[var(--midnight)]/20 border-[var(--midnight)]"
@@ -120,7 +134,7 @@ export default function BranchCard({ branch, isSelected, onClick, onGetDirection
             className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${
               isSelected
                 ? "bg-[var(--warm-white)]/20 text-[var(--warm-white)] hover:bg-[var(--warm-white)]/30"
-                : "bg-[var(--cream)] text-[var(--midnight)] hover:bg-[var(--slate)]/10"
+                : "bg-white text-[var(--midnight)] border border-[var(--midnight)]/15 hover:bg-[var(--cream)]"
             }`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -161,3 +175,6 @@ export default function BranchCard({ branch, isSelected, onClick, onGetDirection
     </div>
   );
 }
+
+const BranchCard = memo(BranchCardImpl);
+export default BranchCard;

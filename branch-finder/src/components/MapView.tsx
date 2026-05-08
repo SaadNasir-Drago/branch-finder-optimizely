@@ -9,12 +9,19 @@ import "@/styles/mapbox-directions-custom.css";
 import { Branch, UserLocation } from "@/types/branch";
 import { formatDistance } from "@/lib/utils";
 
+type MapStatus =
+  | { kind: "loading" }
+  | { kind: "ready" }
+  | { kind: "error"; reason: "missing-token" | "init-failed" | "auth-failed"; message: string };
+
 interface MapViewProps {
   branches: Branch[];
   selectedBranch: Branch | null;
   onBranchSelect: (branch: Branch) => void;
   userLocation?: UserLocation | null;
   onDirectionsReady?: (handler: (branch: Branch) => void) => void;
+  onPopupDirectionsClick?: (branch: Branch) => void;
+  onMapError?: (reason: "missing-token" | "init-failed" | "auth-failed") => void;
 }
 
 export default function MapView({
@@ -23,15 +30,42 @@ export default function MapView({
   onBranchSelect,
   userLocation,
   onDirectionsReady,
+  onPopupDirectionsClick,
+  onMapError,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
-  const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
+  const branchesByIdRef = useRef<Map<string, Branch>>(new Map());
+  const layersReadyRef = useRef(false);
   const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const popupRef = useRef<mapboxgl.Popup | null>(null);
   const directionsRef = useRef<MapboxDirections | null>(null);
   const [showingDirections, setShowingDirections] = useState(false);
+  const [mapStatus, setMapStatus] = useState<MapStatus>({ kind: "loading" });
   const flyToTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const prevSelectedIdRef = useRef<string | null>(null);
+
+  const SOURCE_ID = "branches";
+  const CLUSTERS_LAYER = "branches-clusters";
+  const CLUSTER_COUNT_LAYER = "branches-cluster-count";
+  const POINTS_LAYER = "branches-points";
+
+  // Stable refs so marker listeners always call the latest handler/selection
+  // without forcing the marker-build effect to re-run when these props change.
+  const onBranchSelectRef = useRef(onBranchSelect);
+  useEffect(() => {
+    onBranchSelectRef.current = onBranchSelect;
+  }, [onBranchSelect]);
+
+  const onMapErrorRef = useRef(onMapError);
+  useEffect(() => {
+    onMapErrorRef.current = onMapError;
+  }, [onMapError]);
+
+  const onPopupDirectionsClickRef = useRef(onPopupDirectionsClick);
+  useEffect(() => {
+    onPopupDirectionsClickRef.current = onPopupDirectionsClick;
+  }, [onPopupDirectionsClick]);
 
   // Initialize map
   useEffect(() => {
@@ -40,22 +74,58 @@ export default function MapView({
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
     if (!token) {
       console.error("Mapbox token not found");
+      setMapStatus({
+        kind: "error",
+        reason: "missing-token",
+        message: "Map unavailable: NEXT_PUBLIC_MAPBOX_TOKEN is not set.",
+      });
+      onMapErrorRef.current?.("missing-token");
       return;
     }
 
     mapboxgl.accessToken = token;
 
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: "mapbox://styles/mapbox/light-v11",
-      center: [0, 20],
-      zoom: 1.5,
-      projection: "mercator",
-      // Performance optimizations
-      preserveDrawingBuffer: false, // Better performance when not exporting map
-      antialias: false, // Disable antialiasing for better performance
-      fadeDuration: 100, // Reduce fade duration for snappier feel
-      attributionControl: false, // Remove attribution control (we'll add it back manually)
+    try {
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: "mapbox://styles/mapbox/light-v11",
+        center: [0, 20],
+        zoom: 1.5,
+        projection: "mercator",
+        // Performance optimizations
+        preserveDrawingBuffer: false, // Better performance when not exporting map
+        antialias: false, // Disable antialiasing for better performance
+        fadeDuration: 100, // Reduce fade duration for snappier feel
+        attributionControl: false, // Remove attribution control (we'll add it back manually)
+      });
+    } catch (err) {
+      console.error("Mapbox initialization failed", err);
+      setMapStatus({
+        kind: "error",
+        reason: "init-failed",
+        message: "Failed to initialize the map.",
+      });
+      onMapErrorRef.current?.("init-failed");
+      return;
+    }
+
+    // Surface runtime errors (e.g., 401 from invalid token, tile fetch failures)
+    map.current.on("error", (e) => {
+      const status = (e?.error as { status?: number } | undefined)?.status;
+      if (status === 401 || status === 403) {
+        setMapStatus({
+          kind: "error",
+          reason: "auth-failed",
+          message: "Map unavailable: the Mapbox token was rejected.",
+        });
+        onMapErrorRef.current?.("auth-failed");
+      } else {
+        console.error("Mapbox runtime error", e?.error ?? e);
+      }
+    });
+
+    map.current.on("load", () => {
+      setMapStatus({ kind: "ready" });
     });
 
     map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
@@ -83,6 +153,7 @@ export default function MapView({
       map.current?.remove();
       map.current = null;
       directionsRef.current = null;
+      layersReadyRef.current = false;
     };
   }, []);
 
@@ -175,167 +246,162 @@ export default function MapView({
     }
   }, [onDirectionsReady, showDirections]);
 
-  // Create marker element
-  const createMarkerElement = useCallback((isSelected: boolean) => {
-    const el = document.createElement("div");
-    el.className = "branch-marker";
-    el.style.cssText = `
-      width: ${isSelected ? "40px" : "32px"};
-      height: ${isSelected ? "40px" : "32px"};
-      background-color: ${isSelected ? "#d4af37" : "#0a1628"};
-      border: 3px solid ${isSelected ? "#0a1628" : "#d4af37"};
-      border-radius: 50%;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 4px 12px rgba(10, 22, 40, ${isSelected ? "0.4" : "0.3"});
-      transition: all 0.2s ease;
-      z-index: ${isSelected ? "40" : "10"};
-    `;
+  // Build the GeoJSON FeatureCollection for the current branches list.
+  // Feature `id` must be a number for feature-state lookups via filter
+  // expressions, so we hash branch._id into a stable numeric id and keep
+  // a map back to the full branch object for click handlers.
+  const buildFeatureCollection = useCallback(
+    (
+      list: Branch[]
+    ): GeoJSON.FeatureCollection<GeoJSON.Point, { branchId: string }> => ({
+      type: "FeatureCollection",
+      features: list.map((b, i) => ({
+        type: "Feature",
+        id: i,
+        geometry: { type: "Point", coordinates: [b.lng, b.lat] },
+        properties: { branchId: b._id },
+      })),
+    }),
+    []
+  );
 
-    const inner = document.createElement("div");
-    inner.style.cssText = `
-      width: ${isSelected ? "16px" : "12px"};
-      height: ${isSelected ? "16px" : "12px"};
-      background-color: ${isSelected ? "#0a1628" : "#d4af37"};
-      border-radius: 50%;
-    `;
-    el.appendChild(inner);
-
-    return el;
-  }, []);
-
-  // Update markers when branches change - OPTIMIZED with selective updates
+  // Initialize cluster source + layers + interactions once the map is ready.
+  // This effect runs after `mapStatus` flips to `ready`, ensuring the style
+  // is loaded before we add sources.
   useEffect(() => {
-    if (!map.current) return;
+    if (mapStatus.kind !== "ready" || !map.current || layersReadyRef.current) return;
+    const m = map.current;
 
-    // Get current branch IDs for quick lookup
-    const currentBranchIds = new Set(branches.map(b => b._id));
-
-    // Remove markers for branches that are no longer in the filtered list
-    markersRef.current.forEach((marker, branchId) => {
-      if (!currentBranchIds.has(branchId)) {
-        marker.remove();
-        markersRef.current.delete(branchId);
-      }
+    m.addSource(SOURCE_ID, {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+      cluster: true,
+      clusterRadius: 50,
+      clusterMaxZoom: 12,
     });
 
-    // Add or update markers for current branches
-    branches.forEach((branch) => {
-      const isSelected = selectedBranch?._id === branch._id;
-      const existingMarker = markersRef.current.get(branch._id);
-
-      if (existingMarker) {
-        // Update existing marker if selection state changed
-        const el = existingMarker.getElement();
-        const wasSelected = el.style.backgroundColor === "rgb(212, 175, 55)"; // gold color
-
-        if (wasSelected !== isSelected) {
-          // Remove and recreate marker with new state
-          existingMarker.remove();
-          const newEl = createMarkerElement(isSelected);
-          const inner = newEl.firstChild as HTMLDivElement;
-
-          // Add event listeners
-          const handleMouseEnter = () => {
-            if (!isSelected) {
-              newEl.style.width = "38px";
-              newEl.style.height = "38px";
-              if (inner) {
-                inner.style.width = "14px";
-                inner.style.height = "14px";
-              }
-            }
-          };
-
-          const handleMouseLeave = () => {
-            if (!isSelected) {
-              newEl.style.width = "32px";
-              newEl.style.height = "32px";
-              if (inner) {
-                inner.style.width = "12px";
-                inner.style.height = "12px";
-              }
-            }
-          };
-
-          const handleClick = () => {
-            onBranchSelect(branch);
-          };
-
-          newEl.addEventListener("mouseenter", handleMouseEnter);
-          newEl.addEventListener("mouseleave", handleMouseLeave);
-          newEl.addEventListener("click", handleClick);
-
-          const newMarker = new mapboxgl.Marker({
-            element: newEl,
-            anchor: "center"
-          })
-            .setLngLat([branch.lng, branch.lat])
-            .addTo(map.current!);
-
-          markersRef.current.set(branch._id, newMarker);
-        }
-      } else {
-        // Create new marker
-        const el = createMarkerElement(isSelected);
-        const inner = el.firstChild as HTMLDivElement;
-
-        const handleMouseEnter = () => {
-          if (!isSelected) {
-            el.style.width = "38px";
-            el.style.height = "38px";
-            if (inner) {
-              inner.style.width = "14px";
-              inner.style.height = "14px";
-            }
-          }
-        };
-
-        const handleMouseLeave = () => {
-          if (!isSelected) {
-            el.style.width = "32px";
-            el.style.height = "32px";
-            if (inner) {
-              inner.style.width = "12px";
-              inner.style.height = "12px";
-            }
-          }
-        };
-
-        const handleClick = () => {
-          onBranchSelect(branch);
-        };
-
-        el.addEventListener("mouseenter", handleMouseEnter);
-        el.addEventListener("mouseleave", handleMouseLeave);
-        el.addEventListener("click", handleClick);
-
-        const marker = new mapboxgl.Marker({
-          element: el,
-          anchor: "center"
-        })
-          .setLngLat([branch.lng, branch.lat])
-          .addTo(map.current!);
-
-        markersRef.current.set(branch._id, marker);
-      }
+    m.addLayer({
+      id: CLUSTERS_LAYER,
+      type: "circle",
+      source: SOURCE_ID,
+      filter: ["has", "point_count"],
+      paint: {
+        "circle-color": "#d4af37",
+        "circle-stroke-width": 3,
+        "circle-stroke-color": "#0a1628",
+        "circle-radius": [
+          "step",
+          ["get", "point_count"],
+          18,
+          25,
+          24,
+          100,
+          30,
+        ],
+        "circle-opacity": 0.95,
+      },
     });
 
-    // Fit bounds only when branches list changes (not on selection)
-    if (branches.length > 0 && markersRef.current.size === branches.length) {
-      const bounds = new mapboxgl.LngLatBounds();
-      branches.forEach((branch) => {
-        bounds.extend([branch.lng, branch.lat]);
+    m.addLayer({
+      id: CLUSTER_COUNT_LAYER,
+      type: "symbol",
+      source: SOURCE_ID,
+      filter: ["has", "point_count"],
+      layout: {
+        "text-field": ["get", "point_count_abbreviated"],
+        "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+        "text-size": 13,
+      },
+      paint: {
+        "text-color": "#0a1628",
+      },
+    });
+
+    m.addLayer({
+      id: POINTS_LAYER,
+      type: "circle",
+      source: SOURCE_ID,
+      filter: ["!", ["has", "point_count"]],
+      paint: {
+        "circle-color": [
+          "case",
+          ["boolean", ["feature-state", "selected"], false],
+          "#d4af37",
+          "#0a1628",
+        ],
+        "circle-radius": [
+          "case",
+          ["boolean", ["feature-state", "selected"], false],
+          10,
+          7,
+        ],
+        "circle-stroke-width": 3,
+        "circle-stroke-color": [
+          "case",
+          ["boolean", ["feature-state", "selected"], false],
+          "#0a1628",
+          "#d4af37",
+        ],
+      },
+    });
+
+    // Click a single point → select the branch.
+    m.on("click", POINTS_LAYER, (e) => {
+      const feature = e.features?.[0];
+      if (!feature) return;
+      const branchId = (feature.properties as { branchId?: string } | null)?.branchId;
+      if (!branchId) return;
+      const branch = branchesByIdRef.current.get(branchId);
+      if (branch) onBranchSelectRef.current(branch);
+    });
+
+    // Click a cluster → zoom into it.
+    m.on("click", CLUSTERS_LAYER, (e) => {
+      const feature = e.features?.[0];
+      if (!feature) return;
+      const clusterId = (feature.properties as { cluster_id?: number } | null)?.cluster_id;
+      if (clusterId == null) return;
+      const source = m.getSource(SOURCE_ID) as mapboxgl.GeoJSONSource;
+      source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+        if (err || zoom == null) return;
+        const geom = feature.geometry as GeoJSON.Point;
+        m.easeTo({ center: geom.coordinates as [number, number], zoom });
       });
+    });
 
-      // Include user location in bounds if available
-      if (userLocation) {
-        bounds.extend([userLocation.lng, userLocation.lat]);
-      }
+    const setPointer = () => {
+      m.getCanvas().style.cursor = "pointer";
+    };
+    const clearPointer = () => {
+      m.getCanvas().style.cursor = "";
+    };
+    m.on("mouseenter", POINTS_LAYER, setPointer);
+    m.on("mouseleave", POINTS_LAYER, clearPointer);
+    m.on("mouseenter", CLUSTERS_LAYER, setPointer);
+    m.on("mouseleave", CLUSTERS_LAYER, clearPointer);
 
-      // Use requestAnimationFrame to defer bounds fitting
+    layersReadyRef.current = true;
+  }, [mapStatus]);
+
+  // Update the cluster source whenever the filtered branches change.
+  // Also re-applies feature-state for the currently selected branch (if any)
+  // since rebuilding the source clears prior feature-state.
+  useEffect(() => {
+    if (!map.current || !layersReadyRef.current) return;
+    const m = map.current;
+    const source = m.getSource(SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
+    if (!source) return;
+
+    branchesByIdRef.current = new Map(branches.map((b) => [b._id, b]));
+    source.setData(buildFeatureCollection(branches));
+    // Feature state is cleared when setData runs; reapply selection.
+    prevSelectedIdRef.current = null;
+
+    if (branches.length > 0) {
+      const bounds = new mapboxgl.LngLatBounds();
+      branches.forEach((branch) => bounds.extend([branch.lng, branch.lat]));
+      if (userLocation) bounds.extend([userLocation.lng, userLocation.lat]);
+
       requestAnimationFrame(() => {
         if (map.current) {
           map.current.fitBounds(bounds, {
@@ -346,7 +412,33 @@ export default function MapView({
         }
       });
     }
-  }, [branches, selectedBranch, onBranchSelect, createMarkerElement, userLocation]);
+    // userLocation intentionally omitted: bounds extension is only relevant
+    // when the branches list changes, and re-fitting on every location update
+    // would override the user's manual pan/zoom.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branches, buildFeatureCollection]);
+
+  // Apply feature-state for the selected branch. Uses a sourceFilter so we
+  // toggle exactly one feature without iterating all of them.
+  useEffect(() => {
+    if (!map.current || !layersReadyRef.current) return;
+    const m = map.current;
+    const prevId = prevSelectedIdRef.current;
+    const nextId = selectedBranch?._id ?? null;
+    if (prevId === nextId) return;
+
+    const setSelected = (branchId: string, value: boolean) => {
+      // Find the feature index by branchId. Features in the source are keyed
+      // by numeric id; we look it up via the branches list order to match.
+      const idx = branches.findIndex((b) => b._id === branchId);
+      if (idx < 0) return;
+      m.setFeatureState({ source: SOURCE_ID, id: idx }, { selected: value });
+    };
+
+    if (prevId) setSelected(prevId, false);
+    if (nextId) setSelected(nextId, true);
+    prevSelectedIdRef.current = nextId;
+  }, [selectedBranch, branches]);
 
   // Fly to selected branch - OPTIMIZED with debouncing
   useEffect(() => {
@@ -381,13 +473,12 @@ export default function MapView({
          </p>`
       : '';
 
-    // Create popup with directions button if user location is available
-    const directionsButton = userLocation
-      ? `<button id="show-directions-btn"
-           style="font-size: 14px; color: white; background: #0d4d56; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-weight: 500; transition: background 0.2s;">
-          🗺️ Show Directions
-        </button>`
-      : '';
+    // Always render the directions button; the click handler triggers the
+    // location request if the user hasn't granted it yet.
+    const directionsButton = `<button id="show-directions-btn"
+         style="font-size: 14px; color: white; background: #0d4d56; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-weight: 500; transition: background 0.2s;">
+        🗺️ Show Directions
+      </button>`;
 
     // Use setTimeout to defer popup creation slightly for smoother animation
     setTimeout(() => {
@@ -426,18 +517,20 @@ export default function MapView({
         )
         .addTo(map.current);
 
-      // Add click event listener to the directions button if it exists
-      if (userLocation) {
-        const btn = document.getElementById("show-directions-btn");
-        if (btn) {
-          btn.addEventListener("click", () => showDirections(selectedBranch));
-          btn.addEventListener("mouseenter", () => {
-            btn.style.background = "#0a1628";
-          });
-          btn.addEventListener("mouseleave", () => {
-            btn.style.background = "#0d4d56";
-          });
-        }
+      // Wire the directions button to the parent handler. If location isn't
+      // granted, the parent triggers the geolocation request and fires
+      // directions once it resolves.
+      const btn = document.getElementById("show-directions-btn");
+      if (btn) {
+        btn.addEventListener("click", () => {
+          onPopupDirectionsClickRef.current?.(selectedBranch);
+        });
+        btn.addEventListener("mouseenter", () => {
+          btn.style.background = "#0a1628";
+        });
+        btn.addEventListener("mouseleave", () => {
+          btn.style.background = "#0d4d56";
+        });
       }
     }, 200); // Delay popup to let fly-to animation start first
 
@@ -452,15 +545,53 @@ export default function MapView({
   }, [selectedBranch, userLocation, showDirections]);
 
   return (
-    <div className="relative w-full h-full rounded-2xl overflow-hidden shadow-lg">
+    <div
+      role="region"
+      aria-label={`Interactive branch location map with ${branches.length} branches`}
+      className="relative w-full h-full rounded-2xl overflow-hidden shadow-lg"
+    >
       <div ref={mapContainer} className="w-full h-full" />
 
       {/* Map loading placeholder */}
-      {!map.current && (
+      {mapStatus.kind === "loading" && (
         <div className="absolute inset-0 bg-cream flex items-center justify-center">
           <div className="text-center">
             <div className="w-12 h-12 border-4 border-gold border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-slate">Loading map...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Map error state */}
+      {mapStatus.kind === "error" && (
+        <div
+          role="alert"
+          className="absolute inset-0 bg-cream flex items-center justify-center p-6"
+        >
+          <div className="text-center max-w-md">
+            <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-midnight/5 flex items-center justify-center">
+              <svg
+                className="w-6 h-6 text-midnight"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+                />
+              </svg>
+            </div>
+            <p className="text-midnight font-medium mb-2">Map unavailable</p>
+            <p className="text-slate text-sm">
+              {mapStatus.reason === "missing-token"
+                ? "The Mapbox access token is not configured. The list view is still available."
+                : mapStatus.reason === "auth-failed"
+                ? "The Mapbox token was rejected. Please check that it is valid."
+                : "We couldn't load the map. The list view is still available."}
+            </p>
           </div>
         </div>
       )}

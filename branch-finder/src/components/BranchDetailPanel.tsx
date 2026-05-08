@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { Branch } from "@/types/branch";
 import { formatDistance } from "@/lib/utils";
 
@@ -15,12 +16,76 @@ export default function BranchDetailPanel({
   onClose,
   onGetDirections,
 }: BranchDetailPanelProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+  const [shareStatus, setShareStatus] = useState<"idle" | "copied" | "shared">("idle");
+  const shareTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!branch) return;
+
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+    closeBtnRef.current?.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab" || !panelRef.current) return;
+
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocusedRef.current?.focus?.();
+    };
+  }, [branch, onClose]);
+
+  useEffect(() => {
+    return () => {
+      if (shareTimeoutRef.current) clearTimeout(shareTimeoutRef.current);
+    };
+  }, []);
+
   if (!branch) return null;
 
   const handleGetDirections = () => {
     if (onGetDirections) {
       onGetDirections(branch);
       onClose();
+    }
+  };
+
+  const flashShareStatus = (status: "copied" | "shared") => {
+    setShareStatus(status);
+    if (shareTimeoutRef.current) clearTimeout(shareTimeoutRef.current);
+    shareTimeoutRef.current = setTimeout(() => setShareStatus("idle"), 1800);
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      flashShareStatus("copied");
+    } catch {
+      // Clipboard blocked (e.g. insecure context) — leave status idle.
     }
   };
 
@@ -34,16 +99,13 @@ export default function BranchDetailPanel({
           text: `Check out this Brightstream Bank branch: ${branch.Name}`,
           url: shareUrl,
         });
+        flashShareStatus("shared");
       } catch {
-        copyToClipboard(shareUrl);
+        await copyToClipboard(shareUrl);
       }
     } else {
-      copyToClipboard(shareUrl);
+      await copyToClipboard(shareUrl);
     }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
   };
 
   return (
@@ -52,14 +114,22 @@ export default function BranchDetailPanel({
       <div
         className="fixed inset-0 bg-black/50 z-[9999]"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       {/* Panel */}
-      <div className="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl z-[10000] flex flex-col animate-slide-in-right">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="branch-detail-title"
+        className="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl z-[10000] flex flex-col animate-slide-in-right"
+      >
         {/* Header */}
         <div className="bg-gradient-to-br from-midnight via-navy to-deep-teal p-6 text-white">
           <div className="flex items-start justify-between mb-4">
             <button
+              ref={closeBtnRef}
               onClick={onClose}
               className="p-2 -ml-2 hover:bg-white/10 rounded-lg transition-colors"
               aria-label="Close panel"
@@ -68,18 +138,32 @@ export default function BranchDetailPanel({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-            <button
-              onClick={handleShare}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-              aria-label="Share branch"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-              </svg>
-            </button>
+            <div className="relative">
+              <button
+                onClick={handleShare}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                aria-label="Share branch"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+              </button>
+              {shareStatus !== "idle" && (
+                <span
+                  role="status"
+                  aria-live="polite"
+                  className="absolute right-0 top-full mt-1 whitespace-nowrap rounded-md bg-gold px-2 py-1 text-xs font-medium text-midnight shadow-md"
+                >
+                  {shareStatus === "copied" ? "Link copied!" : "Shared!"}
+                </span>
+              )}
+            </div>
           </div>
 
-          <h2 className="font-[family-name:var(--font-playfair)] text-2xl font-bold mb-2">
+          <h2
+            id="branch-detail-title"
+            className="font-[family-name:var(--font-playfair)] text-2xl font-bold mb-2"
+          >
             {branch.Name}
           </h2>
 
@@ -160,6 +244,7 @@ export default function BranchDetailPanel({
         <div className="p-6 border-t border-cream bg-warm-white">
           <button
             onClick={handleGetDirections}
+            aria-label={`Get directions to ${branch.Name}`}
             className="w-full flex items-center justify-center gap-2 bg-gold text-midnight py-4 px-6 rounded-xl font-medium hover:bg-gold/90 transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

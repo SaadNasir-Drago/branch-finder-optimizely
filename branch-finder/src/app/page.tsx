@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect, Suspense } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Image from "next/image";
@@ -8,7 +8,7 @@ import Header from "@/components/Header";
 import SearchBar from "@/components/SearchBar";
 import BranchList from "@/components/BranchList";
 import BranchDetailPanel from "@/components/BranchDetailPanel";
-import { useBranches } from "@/components/useBranches";
+import { useBranches } from "@/hooks/useBranches";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { Branch } from "@/types/branch";
 import {
@@ -66,40 +66,41 @@ function BranchFinderContent() {
     clearLocation,
   } = useGeolocation();
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [countryFilter, setCountryFilter] = useState<string | null>(null);
-  const [cityFilter, setCityFilter] = useState<string | null>(null);
+  // Hydrate filter state from URL on first render only — lazy initializers
+  // avoid an extra render and don't fight subsequent user-driven URL updates.
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
+  const [countryFilter, setCountryFilter] = useState<string | null>(
+    () => searchParams.get("country")
+  );
+  const [cityFilter, setCityFilter] = useState<string | null>(
+    () => searchParams.get("city")
+  );
   const [sortBy, setSortBy] = useState<"name" | "city" | "country" | "distance">("name");
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
   const [activeView, setActiveView] = useState<"list" | "map">("list");
   const [directionsHandler, setDirectionsHandler] = useState<((branch: Branch) => void) | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const pendingDirectionsBranchRef = useRef<Branch | null>(null);
 
   // Track when component is mounted (client-side only)
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // Sync URL params on mount
+  // Apply ?branch= deep-link once branches finish loading. Holds the pending
+  // ID separately so it survives the load even if searchParams later changes.
+  const pendingBranchIdRef = useRef<string | null>(searchParams.get("branch"));
   useEffect(() => {
-    const branchId = searchParams.get("branch");
-    const country = searchParams.get("country");
-    const city = searchParams.get("city");
-    const query = searchParams.get("q");
+    const pendingId = pendingBranchIdRef.current;
+    if (!pendingId || branches.length === 0) return;
 
-    if (country) setCountryFilter(country);
-    if (city) setCityFilter(city);
-    if (query) setSearchQuery(query);
-
-    // Find and select branch by ID from URL (don't auto-open detail panel)
-    if (branchId && branches.length > 0) {
-      const branch = branches.find((b) => b._id === branchId);
-      if (branch) {
-        setSelectedBranch(branch);
-      }
+    const branch = branches.find((b) => b._id === pendingId);
+    if (branch) {
+      setSelectedBranch(branch);
     }
-  }, [searchParams, branches]);
+    pendingBranchIdRef.current = null;
+  }, [branches]);
 
   // Update URL when filters change
   const updateURL = useCallback(
@@ -248,21 +249,48 @@ function BranchFinderContent() {
     setDirectionsHandler(() => handler);
   }, []);
 
-  // Handle get directions from BranchCard
+  // If the map fails to load, fall back to the list view on mobile
+  const handleMapError = useCallback(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setActiveView("list");
+    }
+  }, []);
+
+  // Handle get directions from BranchCard / DetailPanel / map popup.
+  // If location isn't granted yet, kick off the request and stash the branch
+  // so the effect below fires directions once the position resolves.
   const handleGetDirections = useCallback(
     (branch: Branch) => {
-      if (directionsHandler && userLocation) {
-        // Select the branch and switch to map view on mobile
-        setSelectedBranch(branch);
-        if (typeof window !== "undefined" && window.innerWidth < 1024) {
-          setActiveView("map");
-        }
-        // Trigger directions on the Mapbox map
+      setSelectedBranch(branch);
+      if (typeof window !== "undefined" && window.innerWidth < 1024) {
+        setActiveView("map");
+      }
+
+      if (userLocation && directionsHandler) {
         directionsHandler(branch);
+        return;
+      }
+
+      pendingDirectionsBranchRef.current = branch;
+      if (!userLocation) {
+        requestLocation();
       }
     },
-    [directionsHandler, userLocation]
+    [directionsHandler, userLocation, requestLocation]
   );
+
+  // Fire pending directions once location resolves; cancel on permission errors.
+  useEffect(() => {
+    if (locationError) {
+      pendingDirectionsBranchRef.current = null;
+      return;
+    }
+    const pending = pendingDirectionsBranchRef.current;
+    if (pending && userLocation && directionsHandler) {
+      directionsHandler(pending);
+      pendingDirectionsBranchRef.current = null;
+    }
+  }, [userLocation, directionsHandler, locationError]);
 
   return (
     <div className="min-h-screen bg-warm-white">
@@ -498,6 +526,8 @@ function BranchFinderContent() {
               onBranchSelect={handleBranchSelect}
               userLocation={userLocation}
               onDirectionsReady={handleDirectionsReady}
+              onPopupDirectionsClick={handleGetDirections}
+              onMapError={handleMapError}
             />
           </div>
         </div>
