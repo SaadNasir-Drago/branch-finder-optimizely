@@ -479,8 +479,9 @@ function BranchFinderContent() {
         </div>
       )}
 
-      {/* Mobile View Toggle */}
-      <div className="lg:hidden sticky top-16 z-40 bg-warm-white border-b border-cream px-4 py-3">
+      {/* Mobile View Toggle. top-20 (80px) clears the fixed Header, which is
+          taller than top-16 (64px) on mobile due to py-6 padding around the logo. */}
+      <div className="lg:hidden sticky top-22 z-40 bg-warm-white border-b border-cream px-4 py-3">
         <div className="flex gap-2">
           <button
             onClick={() => setActiveView("list")}
