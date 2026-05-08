@@ -39,11 +39,14 @@ export default function MapView({
   const layersReadyRef = useRef(false);
   const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const popupRef = useRef<mapboxgl.Popup | null>(null);
+  const clusterHoverPopupRef = useRef<mapboxgl.Popup | null>(null);
   const directionsRef = useRef<MapboxDirections | null>(null);
   const [showingDirections, setShowingDirections] = useState(false);
+  const [routeLoading, setRouteLoading] = useState(false);
   const [mapStatus, setMapStatus] = useState<MapStatus>({ kind: "loading" });
   const flyToTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const prevSelectedIdRef = useRef<string | null>(null);
+  const routeLoadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const SOURCE_ID = "branches";
   const CLUSTERS_LAYER = "branches-clusters";
@@ -148,6 +151,27 @@ export default function MapView({
     // Add directions control to map (it will be hidden until we set origin/destination)
     map.current.addControl(directionsRef.current, "top-left");
 
+    // Track loading state of route fetches so we can render a spinner while
+    // Mapbox Directions is computing the route. The plugin's "route" event
+    // fires when a new route is rendered; "error" fires on failures. Also
+    // listen on the underlying directions GeoJSON sources so we don't get
+    // stuck if the plugin's event fires before our listener attaches.
+    const clearRouteLoading = () => {
+      if (routeLoadingTimeoutRef.current) {
+        clearTimeout(routeLoadingTimeoutRef.current);
+        routeLoadingTimeoutRef.current = null;
+      }
+      setRouteLoading(false);
+    };
+    directionsRef.current.on("route", clearRouteLoading);
+    directionsRef.current.on("error", clearRouteLoading);
+    map.current.on("sourcedata", (e) => {
+      // The directions plugin uses sources prefixed with "directions-".
+      if (e.sourceId && e.sourceId.startsWith("directions-") && e.isSourceLoaded) {
+        clearRouteLoading();
+      }
+    });
+
     return () => {
       // Directions control is removed when map is removed
       map.current?.remove();
@@ -217,6 +241,12 @@ export default function MapView({
   const showDirections = useCallback((branch: Branch) => {
     if (!map.current || !directionsRef.current || !userLocation) return;
 
+    setRouteLoading(true);
+    // Safety net: even if neither the plugin's "route" event nor the
+    // directions sourcedata event fires, never leave the spinner stuck.
+    if (routeLoadingTimeoutRef.current) clearTimeout(routeLoadingTimeoutRef.current);
+    routeLoadingTimeoutRef.current = setTimeout(() => setRouteLoading(false), 8000);
+
     // Set origin (user location) and destination (branch)
     directionsRef.current.setOrigin([userLocation.lng, userLocation.lat]);
     directionsRef.current.setDestination([branch.lng, branch.lat]);
@@ -237,6 +267,11 @@ export default function MapView({
     // Remove the routes from the map
     directionsRef.current.removeRoutes();
     setShowingDirections(false);
+    setRouteLoading(false);
+    if (routeLoadingTimeoutRef.current) {
+      clearTimeout(routeLoadingTimeoutRef.current);
+      routeLoadingTimeoutRef.current = null;
+    }
   }, []);
 
   // Expose showDirections to parent component
@@ -277,7 +312,7 @@ export default function MapView({
       data: { type: "FeatureCollection", features: [] },
       cluster: true,
       clusterRadius: 50,
-      clusterMaxZoom: 12,
+      clusterMaxZoom: 6,
     });
 
     m.addLayer({
@@ -377,8 +412,33 @@ export default function MapView({
     };
     m.on("mouseenter", POINTS_LAYER, setPointer);
     m.on("mouseleave", POINTS_LAYER, clearPointer);
-    m.on("mouseenter", CLUSTERS_LAYER, setPointer);
-    m.on("mouseleave", CLUSTERS_LAYER, clearPointer);
+
+    // Cluster hover: show "<N> branches in this area" popup.
+    m.on("mouseenter", CLUSTERS_LAYER, (e) => {
+      setPointer();
+      const feature = e.features?.[0];
+      if (!feature) return;
+      const count = (feature.properties as { point_count?: number } | null)?.point_count;
+      if (count == null) return;
+      const geom = feature.geometry as GeoJSON.Point;
+      clusterHoverPopupRef.current?.remove();
+      clusterHoverPopupRef.current = new mapboxgl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 16,
+        className: "cluster-hover-popup",
+      })
+        .setLngLat(geom.coordinates as [number, number])
+        .setHTML(
+          `<div style="padding: 6px 10px; font-family: 'Jost', sans-serif; font-size: 13px; color: #0a1628; font-weight: 500;">${count} branches in this area</div>`
+        )
+        .addTo(m);
+    });
+    m.on("mouseleave", CLUSTERS_LAYER, () => {
+      clearPointer();
+      clusterHoverPopupRef.current?.remove();
+      clusterHoverPopupRef.current = null;
+    });
 
     layersReadyRef.current = true;
   }, [mapStatus]);
@@ -440,9 +500,11 @@ export default function MapView({
     prevSelectedIdRef.current = nextId;
   }, [selectedBranch, branches]);
 
-  // Fly to selected branch - OPTIMIZED with debouncing
+  // Fly to selected branch - OPTIMIZED with debouncing.
+  // Re-runs when mapStatus flips to "ready" so a deep-link selection (set
+  // before the map finished loading) lands the camera on the branch.
   useEffect(() => {
-    if (!map.current || !selectedBranch) return;
+    if (mapStatus.kind !== "ready" || !map.current || !selectedBranch) return;
 
     // Clear any pending fly-to animation
     if (flyToTimeoutRef.current) {
@@ -542,7 +604,7 @@ export default function MapView({
         clearTimeout(flyToTimeoutRef.current);
       }
     };
-  }, [selectedBranch, userLocation, showDirections]);
+  }, [selectedBranch, userLocation, showDirections, mapStatus]);
 
   return (
     <div
@@ -611,9 +673,21 @@ export default function MapView({
         </div>
       )}
 
+      {/* Directions loading indicator */}
+      {routeLoading && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-sm px-4 py-2 rounded-xl shadow-md flex items-center gap-2"
+        >
+          <div className="w-4 h-4 border-2 border-gold border-t-transparent rounded-full animate-spin"></div>
+          <span className="text-sm font-medium text-midnight">Loading directions…</span>
+        </div>
+      )}
+
       {/* Clear Directions Button */}
       {showingDirections && (
-        <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-sm rounded-xl shadow-md">
+        <div className="absolute bottom-4 right-4 bg-white/95 backdrop-blur-sm rounded-xl shadow-md">
           <button
             onClick={clearDirections}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-midnight hover:text-deep-teal transition-colors"

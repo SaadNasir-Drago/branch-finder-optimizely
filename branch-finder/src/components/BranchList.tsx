@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect } from "react";
 import { Branch } from "@/types/branch";
 import BranchCard from "./BranchCard";
 
@@ -21,6 +21,14 @@ function BranchListImpl({
   onGetDirections,
   isLoading,
 }: BranchListProps) {
+  // Scroll the selected card into view (covers deep-link selections that
+  // arrive after the list has rendered scrolled to top).
+  useEffect(() => {
+    if (!selectedBranch) return;
+    const el = document.getElementById(`branch-${selectedBranch._id}`);
+    el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [selectedBranch]);
+
   // Show skeleton while loading and there's nothing to display yet.
   // Once partial branches stream in we show those (better than skeleton).
   if (isLoading && branches.length === 0) {

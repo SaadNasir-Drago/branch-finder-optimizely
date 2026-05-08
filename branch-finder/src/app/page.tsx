@@ -88,9 +88,18 @@ function BranchFinderContent() {
     setIsMounted(true);
   }, []);
 
-  // Apply ?branch= deep-link once branches finish loading. Holds the pending
-  // ID separately so it survives the load even if searchParams later changes.
-  const pendingBranchIdRef = useRef<string | null>(searchParams.get("branch"));
+  // Apply ?branch= deep-link once branches finish loading. Reads from
+  // window.location on mount (more reliable than the lazy ref initializer
+  // when hydration timing is awkward). Persists in a ref so a subsequent
+  // searchParams change doesn't clobber the pending intent.
+  const pendingBranchIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const fromSearchParams = searchParams.get("branch");
+    const fromLocation = new URLSearchParams(window.location.search).get("branch");
+    pendingBranchIdRef.current = fromSearchParams ?? fromLocation;
+  }, [searchParams]);
+
   useEffect(() => {
     const pendingId = pendingBranchIdRef.current;
     if (!pendingId || branches.length === 0) return;
@@ -257,8 +266,9 @@ function BranchFinderContent() {
   }, []);
 
   // Handle get directions from BranchCard / DetailPanel / map popup.
-  // If location isn't granted yet, kick off the request and stash the branch
-  // so the effect below fires directions once the position resolves.
+  // If location isn't already on, this acts like a click on "Use My Location"
+  // (triggers the same browser permission prompt), and once the position
+  // resolves the queued branch's directions render automatically.
   const handleGetDirections = useCallback(
     (branch: Branch) => {
       setSelectedBranch(branch);
@@ -272,11 +282,9 @@ function BranchFinderContent() {
       }
 
       pendingDirectionsBranchRef.current = branch;
-      if (!userLocation) {
-        requestLocation();
-      }
+      handleFindNearest();
     },
-    [directionsHandler, userLocation, requestLocation]
+    [directionsHandler, userLocation, handleFindNearest]
   );
 
   // Fire pending directions once location resolves; cancel on permission errors.
@@ -298,7 +306,7 @@ function BranchFinderContent() {
 
       {/* Hero Section */}
       <section className="pt-20 sm:pt-24 pb-8 bg-gradient-to-br from-midnight via-navy to-deep-teal">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
           <div className="text-center mb-8">
             <h1 className="font-[family-name:var(--font-playfair)] text-3xl sm:text-4xl lg:text-5xl font-bold text-warm-white mb-4">
               Find Your Nearest Branch
@@ -381,6 +389,7 @@ function BranchFinderContent() {
               </div>
             </div>
           )}
+
 
           {/* Search Bar */}
           <div className="max-w-3xl mx-auto">
@@ -496,12 +505,12 @@ function BranchFinderContent() {
       </div>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
-        <div className="lg:grid lg:grid-cols-5 lg:gap-8 lg:h-[calc(100vh-340px)] lg:min-h-[600px]">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
+        <div className="lg:grid lg:grid-cols-5 lg:gap-8 lg:h-[calc(100vh-300px)] lg:min-h-[700px]">
           {/* Branch List */}
           <div
             className={`lg:col-span-2 lg:overflow-y-auto lg:pr-2 lg:h-full ${
-              activeView === "list" ? "block h-[calc(100vh-280px)] overflow-y-auto" : "hidden lg:block"
+              activeView === "list" ? "block h-[calc(100vh-240px)] overflow-y-auto" : "hidden lg:block"
             }`}
           >
             <BranchList
@@ -517,7 +526,7 @@ function BranchFinderContent() {
           {/* Map View */}
           <div
             className={`lg:col-span-3 lg:h-full ${
-              activeView === "map" ? "block h-[calc(100vh-280px)]" : "hidden lg:block"
+              activeView === "map" ? "block h-[calc(100vh-240px)]" : "hidden lg:block"
             }`}
           >
             <MapView
