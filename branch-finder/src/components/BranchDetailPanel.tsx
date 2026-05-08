@@ -90,13 +90,20 @@ export default function BranchDetailPanel({
   };
 
   const handleShare = async () => {
-    const shareUrl = `${window.location.origin}${window.location.pathname}?branch=${branch._id}`;
+    // Build a filter URL (country + city + search) so opening the link runs
+    // through the normal filter pipeline and narrows the list to this branch.
+    // Using the unique `_id` via `?branch=` was unreliable, so we filter
+    // instead — country + city + name nearly always isolates a single branch.
+    const params = new URLSearchParams();
+    if (branch.CountryCode) params.set("country", branch.CountryCode);
+    if (branch.City) params.set("city", branch.City);
+    params.set("q", branch.Name);
+    const shareUrl = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
 
     if (navigator.share) {
       try {
         await navigator.share({
           title: `${branch.Name} - Brightstream Bank`,
-          text: `Check out this Brightstream Bank branch: ${branch.Name}`,
           url: shareUrl,
         });
         flashShareStatus("shared");

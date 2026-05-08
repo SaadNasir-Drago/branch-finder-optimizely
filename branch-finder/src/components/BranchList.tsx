@@ -21,13 +21,19 @@ function BranchListImpl({
   onGetDirections,
   isLoading,
 }: BranchListProps) {
-  // Scroll the selected card into view (covers deep-link selections that
-  // arrive after the list has rendered scrolled to top).
+  const selectedId = selectedBranch?._id ?? null;
+  const selectedIndex = selectedId
+    ? branches.findIndex((b) => b._id === selectedId)
+    : -1;
+
+  // Scroll the selected card into view. Also re-fires when the card's
+  // position in the list changes (e.g., distance sort kicks in after the
+  // user grants location), so the highlight stays visible.
   useEffect(() => {
-    if (!selectedBranch) return;
-    const el = document.getElementById(`branch-${selectedBranch._id}`);
+    if (!selectedId) return;
+    const el = document.getElementById(`branch-${selectedId}`);
     el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [selectedBranch]);
+  }, [selectedId, selectedIndex]);
 
   // Show skeleton while loading and there's nothing to display yet.
   // Once partial branches stream in we show those (better than skeleton).
@@ -83,10 +89,6 @@ function BranchListImpl({
       </div>
     );
   }
-
-  const selectedIndex = selectedBranch
-    ? branches.findIndex((b) => b._id === selectedBranch._id)
-    : -1;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (branches.length === 0) return;

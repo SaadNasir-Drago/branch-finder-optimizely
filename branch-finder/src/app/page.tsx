@@ -81,35 +81,38 @@ function BranchFinderContent() {
   const [activeView, setActiveView] = useState<"list" | "map">("list");
   const [directionsHandler, setDirectionsHandler] = useState<((branch: Branch) => void) | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  // Set only when the page is opened via a shared `?branch=<id>` URL.
+  // Narrows list + map to the single shared branch until the user clears it.
+  const [pinnedBranchId, setPinnedBranchId] = useState<string | null>(
+    () => searchParams.get("branch")
+  );
   const pendingDirectionsBranchRef = useRef<Branch | null>(null);
 
-  // Track when component is mounted (client-side only)
+  // Track when component is mounted (client-side only).
+  // The "did-mount" flag is the canonical use of setState-in-effect — it's the
+  // only way to detect post-hydration on the client without an SSR mismatch.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMounted(true);
   }, []);
 
-  // Apply ?branch= deep-link once branches finish loading. Reads from
-  // window.location on mount (more reliable than the lazy ref initializer
-  // when hydration timing is awkward). Persists in a ref so a subsequent
-  // searchParams change doesn't clobber the pending intent.
-  const pendingBranchIdRef = useRef<string | null>(null);
+  // Sync pinnedBranchId from the URL whenever it changes (back/forward nav,
+  // pasting a shared link into the bar of an already-open tab). The lazy
+  // useState initializer only runs once, so without this effect navigating
+  // to a `?branch=<id>` URL on an already-mounted page wouldn't narrow the list.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const fromSearchParams = searchParams.get("branch");
-    const fromLocation = new URLSearchParams(window.location.search).get("branch");
-    pendingBranchIdRef.current = fromSearchParams ?? fromLocation;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPinnedBranchId(searchParams.get("branch"));
   }, [searchParams]);
 
   useEffect(() => {
-    const pendingId = pendingBranchIdRef.current;
-    if (!pendingId || branches.length === 0) return;
-
-    const branch = branches.find((b) => b._id === pendingId);
+    if (!pinnedBranchId || branches.length === 0) return;
+    const branch = branches.find((b) => b._id === pinnedBranchId);
     if (branch) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedBranch(branch);
     }
-    pendingBranchIdRef.current = null;
-  }, [branches]);
+  }, [branches, pinnedBranchId]);
 
   // Update URL when filters change
   const updateURL = useCallback(
@@ -153,9 +156,17 @@ function BranchFinderContent() {
       branchesWithDistance = addDistanceToBranches(branches, userLocation);
     }
 
+    // Shared link: narrow to just the pinned branch (once it's loaded). If the
+    // id doesn't match anything yet (still loading), fall through so the list
+    // stays empty rather than showing all branches and then snapping to one.
+    if (pinnedBranchId) {
+      const pinned = branchesWithDistance.find((b) => b._id === pinnedBranchId);
+      return pinned ? [pinned] : [];
+    }
+
     const filtered = filterBranches(branchesWithDistance, searchQuery, countryFilter, cityFilter);
     return sortBranches(filtered, sortBy);
-  }, [branches, userLocation, searchQuery, countryFilter, cityFilter, sortBy]);
+  }, [branches, userLocation, searchQuery, countryFilter, cityFilter, sortBy, pinnedBranchId]);
 
   // Handle "Find Nearest" button click
   const handleFindNearest = useCallback(() => {
@@ -171,23 +182,31 @@ function BranchFinderContent() {
     }
   }, [clearLocation, sortBy]);
 
-  // Handle branch selection
+  // Clear the shared-link narrowing so the user can browse all branches again.
+  const handleClearPinned = useCallback(() => {
+    setPinnedBranchId(null);
+    setSelectedBranch(null);
+    updateURL({
+      country: countryFilter || undefined,
+      city: cityFilter || undefined,
+      q: searchQuery || undefined,
+    });
+  }, [countryFilter, cityFilter, searchQuery, updateURL]);
+
+  // Handle branch selection. We deliberately do NOT write `?branch=` to the
+  // URL here — that param is reserved for shared-link entry, and writing it
+  // on every click would narrow the list to the clicked branch via the
+  // pinnedBranchId sync effect.
   const handleBranchSelect = useCallback(
     (branch: Branch) => {
       setSelectedBranch(branch);
-      updateURL({
-        branch: branch._id,
-        country: countryFilter || undefined,
-        city: cityFilter || undefined,
-        q: searchQuery || undefined,
-      });
 
       // On mobile, switch to map view when selecting a branch
       if (typeof window !== "undefined" && window.innerWidth < 1024) {
         setActiveView("map");
       }
     },
-    [countryFilter, cityFilter, searchQuery, updateURL]
+    []
   );
 
   // Handle opening detail panel
@@ -211,6 +230,8 @@ function BranchFinderContent() {
     (query: string) => {
       setSearchQuery(query);
       setSelectedBranch(null);
+      // Any user-driven filter change implicitly exits the shared-link view.
+      setPinnedBranchId(null);
       updateURL({
         country: countryFilter || undefined,
         city: cityFilter || undefined,
@@ -226,6 +247,7 @@ function BranchFinderContent() {
       setCountryFilter(code);
       setCityFilter(null);
       setSelectedBranch(null);
+      setPinnedBranchId(null);
       updateURL({
         country: code || undefined,
         q: searchQuery || undefined,
@@ -239,6 +261,7 @@ function BranchFinderContent() {
     (city: string | null) => {
       setCityFilter(city);
       setSelectedBranch(null);
+      setPinnedBranchId(null);
       updateURL({
         country: countryFilter || undefined,
         city: city || undefined,
@@ -281,10 +304,13 @@ function BranchFinderContent() {
         return;
       }
 
+      // Request location without flipping sort to "distance" — that would
+      // re-order the list when permission resolves and bump the selected
+      // card out of view.
       pendingDirectionsBranchRef.current = branch;
-      handleFindNearest();
+      requestLocation();
     },
-    [directionsHandler, userLocation, handleFindNearest]
+    [directionsHandler, userLocation, requestLocation]
   );
 
   // Fire pending directions once location resolves; cancel on permission errors.
@@ -406,6 +432,7 @@ function BranchFinderContent() {
               selectedCity={cityFilter}
               sortBy={sortBy}
               hasUserLocation={!!userLocation}
+              initialSearchQuery={searchQuery}
             />
           </div>
         </div>
@@ -503,6 +530,27 @@ function BranchFinderContent() {
           </button>
         </div>
       </div>
+
+      {/* Shared-link banner: shown when arriving via ?branch=<id> so the user
+          can see why the list is narrowed and return to all branches. */}
+      {pinnedBranchId && (
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+          <div className="flex items-center justify-between gap-4 px-4 py-3 bg-cream border border-gold/40 rounded-xl">
+            <div className="flex items-center gap-2 text-sm text-midnight">
+              <svg className="w-5 h-5 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 015.656 0l1.414 1.414a4 4 0 010 5.656l-3 3a4 4 0 01-5.656 0l-1.06-1.06m1.06-7.07a4 4 0 00-5.656 0l-3 3a4 4 0 000 5.656l1.414 1.414a4 4 0 005.656 0l1.06-1.06" />
+              </svg>
+              <span>Showing a shared branch.</span>
+            </div>
+            <button
+              onClick={handleClearPinned}
+              className="text-sm font-medium text-midnight hover:text-deep-teal underline underline-offset-2"
+            >
+              Show all branches
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">

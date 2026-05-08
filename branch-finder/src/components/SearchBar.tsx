@@ -1,7 +1,7 @@
 "use client";
 
 import { CountryOption } from "@/types/branch";
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { debounce } from "@/lib/utils";
 
 interface SearchBarProps {
@@ -17,6 +17,7 @@ interface SearchBarProps {
   selectedCity: string | null;
   sortBy: "name" | "city" | "country" | "distance";
   hasUserLocation?: boolean;
+  initialSearchQuery?: string;
 }
 
 export default function SearchBar({
@@ -32,9 +33,11 @@ export default function SearchBar({
   selectedCity,
   sortBy,
   hasUserLocation = false,
+  initialSearchQuery = "",
 }: SearchBarProps) {
-  const [searchValue, setSearchValue] = useState("");
+  const [searchValue, setSearchValue] = useState(initialSearchQuery);
   const [showFilters, setShowFilters] = useState(false);
+  const isFirstRunRef = useRef(true);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSearch = useCallback(
@@ -44,7 +47,14 @@ export default function SearchBar({
     [onSearchChange]
   );
 
+  // Skip the first run so a URL-hydrated query (e.g. from a shared link)
+  // isn't immediately overwritten by an `onSearchChange("")` round-trip
+  // before the user has interacted.
   useEffect(() => {
+    if (isFirstRunRef.current) {
+      isFirstRunRef.current = false;
+      return;
+    }
     debouncedSearch(searchValue);
   }, [searchValue, debouncedSearch]);
 

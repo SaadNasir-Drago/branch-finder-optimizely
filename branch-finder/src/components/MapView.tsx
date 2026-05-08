@@ -43,6 +43,9 @@ export default function MapView({
   const directionsRef = useRef<MapboxDirections | null>(null);
   const [showingDirections, setShowingDirections] = useState(false);
   const [routeLoading, setRouteLoading] = useState(false);
+  // Track the branch the current route is rendered for so repeated clicks on
+  // the same destination don't re-trigger the route request and spinner.
+  const activeDirectionsBranchIdRef = useRef<string | null>(null);
   const [mapStatus, setMapStatus] = useState<MapStatus>({ kind: "loading" });
   const flyToTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const prevSelectedIdRef = useRef<string | null>(null);
@@ -69,6 +72,16 @@ export default function MapView({
   useEffect(() => {
     onPopupDirectionsClickRef.current = onPopupDirectionsClick;
   }, [onPopupDirectionsClick]);
+
+  // Keep userLocation in a ref so showDirections can be stable yet always read
+  // the latest value. Without this, showDirections captures userLocation in its
+  // closure and the parent ends up holding a stale handler that early-returns
+  // when the user grants location permission and we then try to fire pending
+  // directions.
+  const userLocationRef = useRef(userLocation);
+  useEffect(() => {
+    userLocationRef.current = userLocation;
+  }, [userLocation]);
 
   // Initialize map
   useEffect(() => {
@@ -237,9 +250,20 @@ export default function MapView({
     }
   }, [userLocation, createUserMarkerElement]);
 
-  // Function to show directions
+  // Function to show directions. Reads userLocation from a ref so this
+  // callback is stable across location updates — the parent caches this
+  // handler, and a stale closure here was silently no-op'ing the first
+  // directions request after the user granted location permission.
   const showDirections = useCallback((branch: Branch) => {
-    if (!map.current || !directionsRef.current || !userLocation) return;
+    const loc = userLocationRef.current;
+    if (!map.current || !directionsRef.current || !loc) return;
+
+    // Already routing to this branch — repeated clicks would otherwise
+    // re-fire the request, restart the spinner, and stack pending fetches.
+    if (activeDirectionsBranchIdRef.current === branch._id) {
+      if (popupRef.current) popupRef.current.remove();
+      return;
+    }
 
     setRouteLoading(true);
     // Safety net: even if neither the plugin's "route" event nor the
@@ -247,18 +271,16 @@ export default function MapView({
     if (routeLoadingTimeoutRef.current) clearTimeout(routeLoadingTimeoutRef.current);
     routeLoadingTimeoutRef.current = setTimeout(() => setRouteLoading(false), 8000);
 
-    // Set origin (user location) and destination (branch)
-    directionsRef.current.setOrigin([userLocation.lng, userLocation.lat]);
+    directionsRef.current.setOrigin([loc.lng, loc.lat]);
     directionsRef.current.setDestination([branch.lng, branch.lat]);
 
-    // Mark that we're showing directions
+    activeDirectionsBranchIdRef.current = branch._id;
     setShowingDirections(true);
 
-    // Close popup
     if (popupRef.current) {
       popupRef.current.remove();
     }
-  }, [userLocation]);
+  }, []);
 
   // Function to clear directions
   const clearDirections = useCallback(() => {
@@ -266,6 +288,7 @@ export default function MapView({
 
     // Remove the routes from the map
     directionsRef.current.removeRoutes();
+    activeDirectionsBranchIdRef.current = null;
     setShowingDirections(false);
     setRouteLoading(false);
     if (routeLoadingTimeoutRef.current) {
