@@ -54,11 +54,13 @@ These were codified as Tailwind design tokens in `globals.css` so every componen
 
 **Mobile: list/map toggle** — On mobile, users toggle between list and map views. On desktop, a 40/60 split view shows both simultaneously.
 
+**Stable directions handler** — `showDirections` reads `userLocation` from a ref so the callback identity stays stable. Previously a stale closure silently no-op'd the first directions request after the user granted location permission. Repeated clicks on the same destination are also short-circuited so they don't restack pending route fetches.
+
 ## Features
 
 **Core:** Search by name/city/address, filter by country and city, sort by name/city/country/distance, responsive design, Brightstream brand styling
 
-**Nice to have (all implemented):** Interactive Mapbox map with custom markers, geolocation (nearest branch), distance badges, turn-by-turn directions, branch detail panel with share, URL state for shareable filtered views
+**Nice to have (all implemented):** Interactive Mapbox map with clustered markers, cluster hover popup previewing branches inside, geolocation ("Find Nearest"), distance badges, turn-by-turn directions with a route-loading spinner, branch detail panel with share, URL state for shareable filtered views (search, country, city, and selected branch).
 
 ## Project Structure
 
@@ -66,20 +68,23 @@ These were codified as Tailwind design tokens in `globals.css` so every componen
 src/
 ├── app/
 │   ├── layout.tsx            # Root layout, font loading
-│   ├── page.tsx              # Main page, state coordination
+│   ├── page.tsx              # Main page, state coordination (Suspense-wrapped)
+│   ├── error.tsx             # Route-level error boundary
 │   └── globals.css           # Tailwind config + design tokens
 ├── components/
 │   ├── Header.tsx            # Navigation bar
 │   ├── SearchBar.tsx         # Search, filters, sort controls
 │   ├── BranchCard.tsx        # Branch card with actions
 │   ├── BranchList.tsx        # Scrollable list container
-│   ├── MapView.tsx           # Mapbox map + markers + directions
-│   ├── BranchDetailPanel.tsx # Slide-out detail view
-│   └── useBranches.ts        # Data fetching hook
+│   ├── MapView.tsx           # Mapbox map + clustered markers + directions
+│   └── BranchDetailPanel.tsx # Slide-out detail view
 ├── hooks/
+│   ├── useBranches.ts        # GraphQL data fetching hook
 │   └── useGeolocation.ts     # Browser geolocation wrapper
 ├── lib/
 │   └── utils.ts              # Filtering, sorting, distance calc
+├── styles/
+│   └── mapbox-directions-custom.css  # Branded overrides for the Directions panel
 └── types/
     ├── branch.ts             # Branch interfaces
     └── mapbox-directions.d.ts
