@@ -119,7 +119,7 @@ export default function BranchDetailPanel({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 z-[9999]"
+        className="fixed inset-0 bg-black/50 z-9999"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -130,10 +130,10 @@ export default function BranchDetailPanel({
         role="dialog"
         aria-modal="true"
         aria-labelledby="branch-detail-title"
-        className="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl z-[10000] flex flex-col animate-slide-in-right"
+        className="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl z-10000 flex flex-col animate-slide-in-right"
       >
         {/* Header */}
-        <div className="bg-gradient-to-br from-midnight via-navy to-deep-teal p-6 text-white">
+        <div className="bg-linear-to-br from-midnight via-navy to-deep-teal p-6 text-white">
           <div className="flex items-start justify-between mb-4">
             <button
               ref={closeBtnRef}
@@ -169,7 +169,7 @@ export default function BranchDetailPanel({
 
           <h2
             id="branch-detail-title"
-            className="font-[family-name:var(--font-playfair)] text-2xl font-bold mb-2"
+            className="font-(family-name:--font-playfair) text-2xl font-bold mb-2"
           >
             {branch.Name}
           </h2>

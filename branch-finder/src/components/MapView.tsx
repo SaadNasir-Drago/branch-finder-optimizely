@@ -50,6 +50,7 @@ export default function MapView({
   const flyToTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const prevSelectedIdRef = useRef<string | null>(null);
   const routeLoadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevBranchIdsKeyRef = useRef<string>("");
 
   const SOURCE_ID = "branches";
   const CLUSTERS_LAYER = "branches-clusters";
@@ -474,6 +475,15 @@ export default function MapView({
     const m = map.current;
     const source = m.getSource(SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
     if (!source) return;
+
+    // The parent re-creates the branches array (with a `distance` field) every
+    // time userLocation changes, even when the underlying set of branches is
+    // identical. Re-running setData + fitBounds in that case would zoom the
+    // camera out to global view in the middle of a "Get Directions" flow that
+    // just resolved geolocation, hiding the route the user asked for.
+    const idsKey = branches.map((b) => b._id).join("|");
+    if (idsKey === prevBranchIdsKeyRef.current) return;
+    prevBranchIdsKeyRef.current = idsKey;
 
     branchesByIdRef.current = new Map(branches.map((b) => [b._id, b]));
     source.setData(buildFeatureCollection(branches));

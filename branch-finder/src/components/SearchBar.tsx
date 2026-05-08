@@ -80,7 +80,7 @@ export default function SearchBar({
         <div className="relative flex-1">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
             <svg
-              className="w-5 h-5 text-[var(--slate)]"
+              className="w-5 h-5 text-slate"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -98,7 +98,7 @@ export default function SearchBar({
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
             placeholder="Search branches..."
-            className="w-full pl-12 pr-10 py-3.5 bg-white border-2 border-white/20 rounded-xl text-[var(--midnight)] placeholder-[var(--slate)] focus:border-[var(--gold)] focus:ring-0 outline-none shadow-lg"
+            className="w-full pl-12 pr-10 py-3.5 bg-white border-2 border-white/20 rounded-xl text-midnight placeholder-slate focus:border-gold focus:ring-0 outline-none shadow-lg"
             suppressHydrationWarning
           />
           {searchValue && (
@@ -107,7 +107,7 @@ export default function SearchBar({
                 setSearchValue("");
                 onSearchChange("");
               }}
-              className="absolute inset-y-0 right-0 pr-4 flex items-center text-[var(--slate)] hover:text-[var(--midnight)]"
+              className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate hover:text-midnight"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -121,8 +121,8 @@ export default function SearchBar({
           onClick={() => setShowFilters(!showFilters)}
           className={`px-4 py-3.5 rounded-xl font-medium flex items-center gap-2 transition-all shadow-lg ${
             showFilters || activeFilterCount > 0
-              ? "bg-[var(--gold)] text-[var(--midnight)]"
-              : "bg-white text-[var(--midnight)] hover:bg-[var(--cream)]"
+              ? "bg-gold text-midnight"
+              : "bg-white text-midnight hover:bg-cream"
           }`}
           suppressHydrationWarning
         >
@@ -136,7 +136,7 @@ export default function SearchBar({
           </svg>
           <span className="hidden sm:inline">Filters</span>
           {activeFilterCount > 0 && (
-            <span className="bg-[var(--midnight)] text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+            <span className="bg-midnight text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
               {activeFilterCount}
             </span>
           )}
@@ -149,14 +149,14 @@ export default function SearchBar({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* Country Filter */}
             <div>
-              <label className="block text-sm font-medium text-[var(--midnight)] mb-2">
+              <label className="block text-sm font-medium text-midnight mb-2">
                 Country
               </label>
               <div className="relative">
                 <select
                   value={selectedCountry || ""}
                   onChange={(e) => onCountryChange(e.target.value || null)}
-                  className="w-full px-4 py-2.5 bg-[var(--cream)]/50 border border-[var(--cream)] rounded-lg text-[var(--midnight)] focus:border-[var(--gold)] focus:ring-0 outline-none appearance-none cursor-pointer"
+                  className="w-full px-4 py-2.5 bg-(--cream)/50 border border-cream rounded-lg text-midnight focus:border-gold focus:ring-0 outline-none appearance-none cursor-pointer"
                   suppressHydrationWarning
                 >
                   <option value="">All Countries</option>
@@ -167,7 +167,7 @@ export default function SearchBar({
                   ))}
                 </select>
                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                  <svg className="w-4 h-4 text-[var(--slate)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-slate" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </div>
@@ -176,10 +176,10 @@ export default function SearchBar({
 
             {/* City Filter */}
             <div>
-              <label className="block text-sm font-medium text-[var(--midnight)] mb-2">
+              <label className="block text-sm font-medium text-midnight mb-2">
                 City
                 {!selectedCountry && (
-                  <span className="text-xs text-[var(--slate)] font-normal ml-1">(select country first)</span>
+                  <span className="text-xs text-slate font-normal ml-1">(select country first)</span>
                 )}
               </label>
               <div className="relative">
@@ -187,9 +187,9 @@ export default function SearchBar({
                   value={selectedCity || ""}
                   onChange={(e) => onCityChange(e.target.value || null)}
                   disabled={!selectedCountry}
-                  className={`w-full px-4 py-2.5 border border-[var(--cream)] rounded-lg text-[var(--midnight)] focus:border-[var(--gold)] focus:ring-0 outline-none appearance-none ${
+                  className={`w-full px-4 py-2.5 border border-cream rounded-lg text-midnight focus:border-gold focus:ring-0 outline-none appearance-none ${
                     selectedCountry
-                      ? "bg-[var(--cream)]/50 cursor-pointer"
+                      ? "bg-(--cream)/50 cursor-pointer"
                       : "bg-gray-100 cursor-not-allowed opacity-60"
                   }`}
                   suppressHydrationWarning
@@ -202,7 +202,7 @@ export default function SearchBar({
                   ))}
                 </select>
                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                  <svg className="w-4 h-4 text-[var(--slate)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-slate" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </div>
@@ -211,14 +211,14 @@ export default function SearchBar({
 
             {/* Sort */}
             <div>
-              <label className="block text-sm font-medium text-[var(--midnight)] mb-2">
+              <label className="block text-sm font-medium text-midnight mb-2">
                 Sort by
               </label>
               <div className="relative">
                 <select
                   value={sortBy}
                   onChange={(e) => onSortChange(e.target.value as "name" | "city" | "country" | "distance")}
-                  className="w-full px-4 py-2.5 bg-[var(--cream)]/50 border border-[var(--cream)] rounded-lg text-[var(--midnight)] focus:border-[var(--gold)] focus:ring-0 outline-none appearance-none cursor-pointer"
+                  className="w-full px-4 py-2.5 bg-(--cream)/50 border border-cream rounded-lg text-midnight focus:border-gold focus:ring-0 outline-none appearance-none cursor-pointer"
                   suppressHydrationWarning
                 >
                   {hasUserLocation && <option value="distance">Distance (Nearest)</option>}
@@ -227,7 +227,7 @@ export default function SearchBar({
                   <option value="country">Country</option>
                 </select>
                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                  <svg className="w-4 h-4 text-[var(--slate)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-slate" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </div>
@@ -237,10 +237,10 @@ export default function SearchBar({
 
           {/* Clear Filters */}
           {activeFilterCount > 0 && (
-            <div className="mt-4 pt-4 border-t border-[var(--cream)]">
+            <div className="mt-4 pt-4 border-t border-cream">
               <button
                 onClick={handleClearFilters}
-                className="text-sm text-[var(--slate)] hover:text-[var(--midnight)] flex items-center gap-1 transition-colors"
+                className="text-sm text-slate hover:text-midnight flex items-center gap-1 transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

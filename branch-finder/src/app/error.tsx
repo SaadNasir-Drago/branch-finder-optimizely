@@ -33,7 +33,7 @@ export default function GlobalError({
             />
           </svg>
         </div>
-        <h1 className="font-[family-name:var(--font-playfair)] text-2xl font-bold text-midnight mb-3">
+        <h1 className="font-(family-name:--font-playfair) text-2xl font-bold text-midnight mb-3">
           Something went wrong
         </h1>
         <p className="text-slate mb-6">

@@ -331,10 +331,10 @@ function BranchFinderContent() {
       <Header />
 
       {/* Hero Section */}
-      <section className="pt-20 sm:pt-24 pb-8 bg-gradient-to-br from-midnight via-navy to-deep-teal">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
+      <section className="pt-20 sm:pt-24 pb-8 bg-linear-to-br from-midnight via-navy to-deep-teal">
+        <div className="max-w-350 mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
           <div className="text-center mb-8">
-            <h1 className="font-[family-name:var(--font-playfair)] text-3xl sm:text-4xl lg:text-5xl font-bold text-warm-white mb-4">
+            <h1 className="font-(family-name:--font-playfair) text-3xl sm:text-4xl lg:text-5xl font-bold text-warm-white mb-4">
               Find Your Nearest Branch
             </h1>
             <p className="text-[clamp(1.1rem,2vw,1.3rem)] text-cream font-light tracking-[0.5px] opacity-95 max-w-2xl mx-auto">
@@ -534,7 +534,7 @@ function BranchFinderContent() {
       {/* Shared-link banner: shown when arriving via ?branch=<id> so the user
           can see why the list is narrowed and return to all branches. */}
       {pinnedBranchId && (
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+        <div className="max-w-350 mx-auto px-4 sm:px-6 lg:px-8 pt-6">
           <div className="flex items-center justify-between gap-4 px-4 py-3 bg-cream border border-gold/40 rounded-xl">
             <div className="flex items-center gap-2 text-sm text-midnight">
               <svg className="w-5 h-5 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -553,8 +553,8 @@ function BranchFinderContent() {
       )}
 
       {/* Main Content */}
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
-        <div className="lg:grid lg:grid-cols-5 lg:gap-8 lg:h-[calc(100vh-300px)] lg:min-h-[700px]">
+      <main className="max-w-350 mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
+        <div className="lg:grid lg:grid-cols-5 lg:gap-8 lg:h-[calc(100vh-300px)] lg:min-h-175">
           {/* Branch List */}
           <div
             className={`lg:col-span-2 lg:overflow-y-auto lg:pr-2 lg:h-full ${
@@ -602,9 +602,9 @@ function BranchFinderContent() {
 
       {/* Articles Section */}
       <section className="py-16 sm:py-20 lg:py-24 px-[5%] bg-warm-white">
-        <div className="max-w-[1400px] mx-auto">
+        <div className="max-w-350 mx-auto">
           <div className="text-center mb-12 sm:mb-16">
-            <h2 className="font-[family-name:var(--font-playfair)] text-[clamp(2.5rem,4vw,3.5rem)] font-bold text-midnight mb-4 tracking-tight leading-[1.1]">
+            <h2 className="font-(family-name:--font-playfair) text-[clamp(2.5rem,4vw,3.5rem)] font-bold text-midnight mb-4 tracking-tight leading-[1.1]">
               Banking Resources
             </h2>
             <p className="text-slate text-[1.1rem] max-w-2xl mx-auto font-light leading-relaxed">
@@ -614,8 +614,8 @@ function BranchFinderContent() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 sm:gap-10 lg:gap-12">
             {/* Article 1 */}
-            <article className="bg-cream rounded-[25px] overflow-hidden transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] hover:-translate-y-[10px] hover:shadow-[0_30px_60px_rgba(10,22,40,0.15)]">
-              <div className="h-[250px] relative">
+            <article className="bg-cream rounded-[25px] overflow-hidden transition-all duration-400 ease-in-out hover:-translate-y-2.5 hover:shadow-[0_30px_60px_rgba(10,22,40,0.15)]">
+              <div className="h-62.5 relative">
                 <Image
                   src="/photo-1486406146926-c627a92ad1ab.jpeg"
                   alt="Personal Finance"
@@ -632,7 +632,7 @@ function BranchFinderContent() {
                   <span>December 8, 2024</span>
                   <span>5 min read</span>
                 </div>
-                <h3 className="font-[family-name:var(--font-playfair)] text-[1.8rem] font-semibold text-midnight mb-4 leading-[1.3]">
+                <h3 className="font-(family-name:--font-playfair) text-[1.8rem] font-semibold text-midnight mb-4 leading-[1.3]">
                   Building Your Emergency Fund
                 </h3>
                 <p className="text-slate leading-[1.8] mb-8 font-light flex-1">
@@ -645,8 +645,8 @@ function BranchFinderContent() {
             </article>
 
             {/* Article 2 */}
-            <article className="bg-cream rounded-[25px] overflow-hidden transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] hover:-translate-y-[10px] hover:shadow-[0_30px_60px_rgba(10,22,40,0.15)]">
-              <div className="h-[250px] relative">
+            <article className="bg-cream rounded-[25px] overflow-hidden transition-all duration-400 ease-in-out hover:-translate-y-2.5 hover:shadow-[0_30px_60px_rgba(10,22,40,0.15)]">
+              <div className="h-62.5 relative">
                 <Image
                   src="/photo-1551135049-8a33b5883817.jpeg"
                   alt="Investing"
@@ -663,7 +663,7 @@ function BranchFinderContent() {
                   <span>December 5, 2024</span>
                   <span>8 min read</span>
                 </div>
-                <h3 className="font-[family-name:var(--font-playfair)] text-[1.8rem] font-semibold text-midnight mb-4 leading-[1.3]">
+                <h3 className="font-(family-name:--font-playfair) text-[1.8rem] font-semibold text-midnight mb-4 leading-[1.3]">
                   Diversification Strategies for 2025
                 </h3>
                 <p className="text-slate leading-[1.8] mb-8 font-light flex-1">
@@ -676,8 +676,8 @@ function BranchFinderContent() {
             </article>
 
             {/* Article 3 */}
-            <article className="bg-cream rounded-[25px] overflow-hidden transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] hover:-translate-y-[10px] hover:shadow-[0_30px_60px_rgba(10,22,40,0.15)]">
-              <div className="h-[250px] relative">
+            <article className="bg-cream rounded-[25px] overflow-hidden transition-all duration-400 ease-in-out hover:-translate-y-2.5 hover:shadow-[0_30px_60px_rgba(10,22,40,0.15)]">
+              <div className="h-62.5 relative">
                 <Image
                   src="/photo-1559526324-4b87b5e36e44.jpeg"
                   alt="Business"
@@ -694,7 +694,7 @@ function BranchFinderContent() {
                   <span>December 3, 2024</span>
                   <span>6 min read</span>
                 </div>
-                <h3 className="font-[family-name:var(--font-playfair)] text-[1.8rem] font-semibold text-midnight mb-4 leading-[1.3]">
+                <h3 className="font-(family-name:--font-playfair) text-[1.8rem] font-semibold text-midnight mb-4 leading-[1.3]">
                   Cash Flow Management for Small Businesses
                 </h3>
                 <p className="text-slate leading-[1.8] mb-8 font-light flex-1">
@@ -711,18 +711,18 @@ function BranchFinderContent() {
 
       {/* Newsletter Section - Stay Informed */}
       <section className="py-16 sm:py-20 lg:py-24 px-[5%] bg-cream">
-        <div className="max-w-[700px] mx-auto text-center">
-          <h2 className="font-[family-name:var(--font-playfair)] text-[clamp(2.5rem,4vw,3.5rem)] font-bold text-midnight mb-6 tracking-tight leading-[1.1]">
+        <div className="max-w-175 mx-auto text-center">
+          <h2 className="font-(family-name:--font-playfair) text-[clamp(2.5rem,4vw,3.5rem)] font-bold text-midnight mb-6 tracking-tight leading-[1.1]">
             Stay Informed
           </h2>
           <p className="text-slate text-[1.1rem] mb-10 font-light leading-relaxed">
             Subscribe to our newsletter for weekly financial insights, market updates, and exclusive banking tips delivered to your inbox.
           </p>
-          <form className="flex flex-col sm:flex-row gap-4 max-w-[500px] mx-auto" suppressHydrationWarning>
+          <form className="flex flex-col sm:flex-row gap-4 max-w-125 mx-auto" suppressHydrationWarning>
             <input
               type="email"
               placeholder="Enter your email address"
-              className="flex-1 px-6 py-4 border-2 border-midnight rounded-[50px] font-[family-name:var(--font-jost)] text-base outline-none transition-all duration-300 focus:border-gold focus:shadow-[0_0_0_4px_rgba(212,175,55,0.1)]"
+              className="flex-1 px-6 py-4 border-2 border-midnight rounded-[50px] font-(family-name:--font-jost) text-base outline-none transition-all duration-300 focus:border-gold focus:shadow-[0_0_0_4px_rgba(212,175,55,0.1)]"
               required
               suppressHydrationWarning
             />
