@@ -195,6 +195,21 @@ export default function MapView({
     };
   }, []);
 
+  // Resize the map whenever its container's size changes. On mobile, the
+  // container is toggled between `hidden` and visible via the list/map switch;
+  // when it becomes visible Mapbox needs `resize()` to recompute the canvas,
+  // otherwise tiles and markers render against a stale 0×0 layout.
+  useEffect(() => {
+    if (!mapContainer.current || mapStatus.kind !== "ready") return;
+    const m = map.current;
+    if (!m) return;
+    const observer = new ResizeObserver(() => {
+      m.resize();
+    });
+    observer.observe(mapContainer.current);
+    return () => observer.disconnect();
+  }, [mapStatus]);
+
   // Create user location marker element
   const createUserMarkerElement = useCallback(() => {
     const el = document.createElement("div");
@@ -470,8 +485,13 @@ export default function MapView({
   // Update the cluster source whenever the filtered branches change.
   // Also re-applies feature-state for the currently selected branch (if any)
   // since rebuilding the source clears prior feature-state.
+  //
+  // Depends on `mapStatus` so this re-runs once the map finishes loading. If
+  // branches arrive before the map's `load` event fires (cached/fast network),
+  // the first run bails out on `!layersReadyRef.current` and we'd never seed
+  // the source — markers wouldn't appear until the next branches change.
   useEffect(() => {
-    if (!map.current || !layersReadyRef.current) return;
+    if (mapStatus.kind !== "ready" || !map.current || !layersReadyRef.current) return;
     const m = map.current;
     const source = m.getSource(SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
     if (!source) return;
@@ -509,7 +529,7 @@ export default function MapView({
     // when the branches list changes, and re-fitting on every location update
     // would override the user's manual pan/zoom.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branches, buildFeatureCollection]);
+  }, [branches, buildFeatureCollection, mapStatus]);
 
   // Apply feature-state for the selected branch. Uses a sourceFilter so we
   // toggle exactly one feature without iterating all of them.
